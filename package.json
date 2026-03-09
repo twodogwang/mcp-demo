@@ -1,0 +1,48 @@
+{
+  "name": "@bakarhythm/get-doc-content",
+  "version": "0.1.0",
+  "description": "MCP server for fetching ONES linked document content from URL or requirement hash",
+  "main": "dist/src/index.js",
+  "bin": {
+    "get-doc-content": "dist/src/index.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    ".env.example"
+  ],
+  "directories": {
+    "doc": "docs",
+    "test": "tests"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "dev": "tsx src/index.ts",
+    "clean": "rm -rf dist",
+    "build": "npm run clean && tsc -p tsconfig.json",
+    "prepack": "npm run build",
+    "start": "node dist/src/index.js",
+    "release:patch": "bumpp --all --commit --tag --no-push --no-verify --release patch",
+    "release:minor": "bumpp --all --commit --tag --no-push --no-verify --release minor",
+    "release:major": "bumpp --all --commit --tag --no-push --no-verify --release major"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "publishConfig": {
+    "access": "public"
+  },
+  "type": "module",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.27.1",
+    "dotenv": "^17.3.1",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@types/node": "^25.3.5",
+    "bumpp": "^10.4.1",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.18"
+  }
+}
