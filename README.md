@@ -72,8 +72,13 @@ npm run test
 - 推送语义化版本 tag（如 `v0.1.2`）
 
 发布前准备：
-1. 在 GitHub 仓库 `Settings -> Secrets and variables -> Actions` 添加 `NPM_TOKEN`（npm Access Token）。
+1. 在 npm 包页面启用 Trusted Publishing（OIDC）并添加 GitHub 仓库信任关系：
+   - Owner/Repo：`twodogwang/mcp-demo`
+   - Workflow file：`.github/workflows/publish-npm.yml`
+   - Environment：留空（当前 workflow 未使用 `environment`）
 2. 确保 `package.json` 的 `version` 与 tag 一致（例如 `version=0.1.2` 对应 tag `v0.1.2`）。
+3. 无需配置 `NPM_TOKEN` Secret。
+4. 该 workflow 使用 Node `22.14.0` 以满足 npm Trusted Publishing 的最低版本要求。
 
 推荐发布流程：
 
@@ -84,7 +89,7 @@ npm run release:patch   # 或 release:minor / release:major
 git push origin main --follow-tags
 ```
 
-工作流会执行：`npm ci` -> `npm test` -> `npm run build` -> `npm publish --access public --provenance`。
+工作流会执行：`npm ci` -> `npm test` -> `npm run build` -> `npm publish --access public --provenance`（通过 GitHub OIDC 获取 npm 发布权限）。
 
 ## MCP 工具
 
