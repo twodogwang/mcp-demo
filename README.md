@@ -64,6 +64,28 @@ npm run start
 npm run test
 ```
 
+## GitHub Actions 发布 npm
+
+仓库已提供工作流：`.github/workflows/publish-npm.yml`。
+
+触发方式：
+- 推送语义化版本 tag（如 `v0.1.2`）
+
+发布前准备：
+1. 在 GitHub 仓库 `Settings -> Secrets and variables -> Actions` 添加 `NPM_TOKEN`（npm Access Token）。
+2. 确保 `package.json` 的 `version` 与 tag 一致（例如 `version=0.1.2` 对应 tag `v0.1.2`）。
+
+推荐发布流程：
+
+```bash
+npm run test
+npm run build
+npm run release:patch   # 或 release:minor / release:major
+git push origin main --follow-tags
+```
+
+工作流会执行：`npm ci` -> `npm test` -> `npm run build` -> `npm publish --access public --provenance`。
+
 ## MCP 工具
 
 ### 1) `search_docs`

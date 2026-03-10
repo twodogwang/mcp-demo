@@ -127,6 +127,9 @@ export async function startStdioServer(): Promise<void> {
 
 if (import.meta.url === `file://${process.argv[1]}`) {
   startStdioServer().catch((err) => {
+    console.error(
+      "[ones-doc-mcp] startup failed before initialize; check ONES_BASE_URL/ONES_USERNAME/ONES_PASSWORD",
+    );
     console.error(err);
     process.exit(1);
   });

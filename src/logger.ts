@@ -6,7 +6,8 @@ export function redactSecrets(input: string): string {
 
 export function logInfo(message: string, meta: Record<string, unknown> = {}): void {
   const serialized = JSON.stringify(meta);
-  console.info(redactSecrets(`${message} ${serialized}`));
+  // MCP stdio transport reserves stdout for protocol frames only.
+  console.error(redactSecrets(`${message} ${serialized}`));
 }
 
 export function logError(message: string, meta: Record<string, unknown> = {}): void {

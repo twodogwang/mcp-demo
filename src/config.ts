@@ -11,7 +11,9 @@ export type AppConfig = {
 function mustGet(key: string, fallback?: string): string {
   const value = process.env[key] ?? fallback;
   if (!value || value.trim() === "") {
-    throw new Error(`Missing required env: ${key}`);
+    throw new Error(
+      `Missing required env: ${key}. Required envs: ONES_BASE_URL, ONES_USERNAME, ONES_PASSWORD`,
+    );
   }
   return value;
 }
