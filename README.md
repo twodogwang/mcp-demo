@@ -23,7 +23,7 @@
 直接运行：
 
 ```bash
-npx -y @bakarhythm/get-doc-content
+npx -y ones-doc-content-mcp
 ```
 
 MCP 客户端配置示例：
@@ -33,7 +33,7 @@ MCP 客户端配置示例：
   "mcpServers": {
     "ones-doc": {
       "command": "npx",
-      "args": ["-y", "@bakarhythm/get-doc-content"],
+      "args": ["-y", "ones-doc-content-mcp"],
       "env": {
         "ONES_BASE_URL": "https://ones.example.internal",
         "ONES_USERNAME": "your_username",
