@@ -1,6 +1,6 @@
 {
   "name": "@bakarhythm/get-doc-content",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "MCP server for fetching ONES linked document content from URL or requirement hash",
   "main": "dist/src/index.js",
   "bin": {
@@ -29,6 +29,14 @@
   "keywords": [],
   "author": "",
   "license": "ISC",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/twodogwang/mcp-demo.git"
+  },
+  "homepage": "https://github.com/twodogwang/mcp-demo#readme",
+  "bugs": {
+    "url": "https://github.com/twodogwang/mcp-demo/issues"
+  },
   "publishConfig": {
     "access": "public"
   },
