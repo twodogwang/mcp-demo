@@ -106,7 +106,9 @@ export function createServer() {
       const doc =
         parsed.kind === "doc"
           ? await client.getDoc(parsed.docId)
-          : await client.getDocByRequirementId(parsed.requirementId);
+          : parsed.kind === "page"
+            ? await client.getPageDoc(parsed.teamId, parsed.pageId)
+            : await client.getDocByRequirementId(parsed.requirementId);
 
       return {
         content: [{ type: "text", text: JSON.stringify(doc, null, 2) }],

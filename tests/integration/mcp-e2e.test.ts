@@ -1,25 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { SessionManager } from "../../src/auth/session-manager";
 import { OnesClient } from "../../src/ones-client";
+import { parseRef } from "../../src/ref-parser";
 
 describe("mcp e2e flow with mocked ones", () => {
   it("login -> search_docs -> get_doc with one re-login retry", async () => {
     const fetchMock = vi
       .fn<typeof fetch>()
-      .mockResolvedValueOnce(
-        new Response("ok", {
-          status: 200,
-          headers: { "set-cookie": "sid=first; Path=/; HttpOnly" },
-        }),
-      )
       .mockResolvedValueOnce(new Response("expired", { status: 401 }))
-      .mockResolvedValueOnce(
-        new Response("ok", {
-          status: 200,
-          headers: { "set-cookie": "sid=second; Path=/; HttpOnly" },
-        }),
-      )
       .mockResolvedValueOnce(
         new Response(JSON.stringify({ items: [{ id: "D-1", title: "Doc 1" }] }), {
           status: 200,
@@ -43,20 +31,19 @@ describe("mcp e2e flow with mocked ones", () => {
     vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
 
     const discovery = {
-      resolveLoginPath: vi
-        .fn()
-        .mockResolvedValue({ path: "/api/account/login", cookie: "sid=seed" }),
       resolveSearchPath: vi.fn().mockResolvedValue("/api/wiki/search"),
       resolveDocTemplate: vi.fn().mockResolvedValue("/api/wiki/docs/{docId}"),
       resolveRequirementTemplate: vi.fn(),
     };
 
-    const sessions = new SessionManager({
-      baseUrl: "https://ones.example.internal",
-      username: "u",
-      password: "p",
-      discovery: discovery as any,
-    });
+    const sessions = {
+      getValidAuthHeaders: vi
+        .fn<() => Promise<Record<string, string>>>()
+        .mockResolvedValueOnce({ Authorization: "Bearer old" })
+        .mockResolvedValueOnce({ Authorization: "Bearer new" })
+        .mockResolvedValueOnce({ Authorization: "Bearer new" }),
+      invalidate: vi.fn(),
+    };
 
     const client = new OnesClient(
       {
@@ -64,7 +51,7 @@ describe("mcp e2e flow with mocked ones", () => {
         timeoutMs: 5000,
         maxContentChars: 20000,
       },
-      sessions,
+      sessions as any,
       discovery as any,
     );
 
@@ -79,12 +66,6 @@ describe("mcp e2e flow with mocked ones", () => {
   it("get_doc with #12345 returns latest linked doc content", async () => {
     const fetchMock = vi
       .fn<typeof fetch>()
-      .mockResolvedValueOnce(
-        new Response("ok", {
-          status: 200,
-          headers: { "set-cookie": "sid=first; Path=/; HttpOnly" },
-        }),
-      )
       .mockResolvedValueOnce(
         new Response(
           JSON.stringify({
@@ -116,9 +97,6 @@ describe("mcp e2e flow with mocked ones", () => {
     vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
 
     const discovery = {
-      resolveLoginPath: vi
-        .fn()
-        .mockResolvedValue({ path: "/api/account/login", cookie: "sid=seed" }),
       resolveSearchPath: vi.fn(),
       resolveDocTemplate: vi.fn().mockResolvedValue("/api/wiki/docs/{docId}"),
       resolveRequirementTemplate: vi
@@ -126,12 +104,12 @@ describe("mcp e2e flow with mocked ones", () => {
         .mockResolvedValue("/api/issues/{requirementId}"),
     };
 
-    const sessions = new SessionManager({
-      baseUrl: "https://ones.example.internal",
-      username: "u",
-      password: "p",
-      discovery: discovery as any,
-    });
+    const sessions = {
+      getValidAuthHeaders: vi
+        .fn<() => Promise<Record<string, string>>>()
+        .mockResolvedValue({ Authorization: "Bearer ok" }),
+      invalidate: vi.fn(),
+    };
 
     const client = new OnesClient(
       {
@@ -139,12 +117,95 @@ describe("mcp e2e flow with mocked ones", () => {
         timeoutMs: 5000,
         maxContentChars: 20000,
       },
-      sessions,
+      sessions as any,
       discovery as any,
     );
 
     const doc = await client.getDocByRequirementId("12345");
     expect(doc.id).toBe("D-2");
     expect(doc.content).toBe("Latest Content");
+  });
+
+  it("parses wiki page url and returns page content", async () => {
+    const parsed = parseRef(
+      "https://1s.oristand.com/wiki/#/team/63FL1oSZ/space/JhN6fj4M/page/9Pkrzqbf",
+      "1s.oristand.com",
+    );
+    expect(parsed.kind).toBe("page");
+
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            title: "#47520 后台管理系统数据权限重构",
+            updated_at: "2026-03-11T07:36:00Z",
+          }),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            content: JSON.stringify({
+              blocks: [
+                {
+                  type: "text",
+                  text: [{ insert: "#47520 后台管理系统数据权限重构" }],
+                },
+                {
+                  type: "text",
+                  text: [{ insert: "需求目的/背景" }],
+                },
+                {
+                  type: "text",
+                  text: [{ insert: "权限管理核心作用" }],
+                },
+              ],
+            }),
+          }),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          },
+        ),
+      );
+
+    vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
+
+    const discovery = {
+      resolveSearchPath: vi.fn(),
+      resolveDocTemplate: vi.fn(),
+      resolveRequirementTemplate: vi.fn(),
+    };
+
+    const sessions = {
+      getValidAuthHeaders: vi
+        .fn<() => Promise<Record<string, string>>>()
+        .mockResolvedValue({ Authorization: "Bearer ok" }),
+      invalidate: vi.fn(),
+    };
+
+    const client = new OnesClient(
+      {
+        baseUrl: "https://1s.oristand.com",
+        timeoutMs: 5000,
+        maxContentChars: 20000,
+      },
+      sessions as any,
+      discovery as any,
+    );
+
+    if (parsed.kind !== "page") {
+      throw new Error("expected page ref");
+    }
+
+    const doc = await client.getPageDoc(parsed.teamId, parsed.pageId);
+    expect(doc.title).toBe("#47520 后台管理系统数据权限重构");
+    expect(doc.content).toContain("需求目的/背景");
+    expect(doc.content).toContain("权限管理核心作用");
   });
 });

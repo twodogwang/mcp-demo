@@ -1,6 +1,7 @@
 export const LOGIN_PATH_CANDIDATES = [
   "/api/login",
   "/api/account/login",
+  "/identity/api/login",
   "/account/login",
 ] as const;
 

@@ -69,7 +69,7 @@ npm run test
 仓库已提供工作流：`.github/workflows/publish-npm.yml`。
 
 触发方式：
-- 推送语义化版本 tag（如 `v0.1.2`）
+- 推送语义化版本 tag（如 `v1.0.0`）
 
 发布前准备：
 1. 在 npm 包页面启用 Trusted Publishing（OIDC）并添加 GitHub 仓库信任关系：
@@ -80,7 +80,16 @@ npm run test
 3. 无需配置 `NPM_TOKEN` Secret。
 4. 该 workflow 使用 Node `22.14.0` 以满足 npm Trusted Publishing 的最低版本要求。
 
-推荐发布流程：
+首次发布 `1.0.0` 推荐流程：
+
+```bash
+npm run test
+npm run build
+npx bumpp 1.0.0 --all --commit --tag --no-push --no-verify --yes
+git push origin main --follow-tags
+```
+
+后续常规发布流程：
 
 ```bash
 npm run test

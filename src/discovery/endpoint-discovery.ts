@@ -34,7 +34,7 @@ export class EndpointDiscovery {
     }
 
     const loginProbe = await this.resolveLoginPath(credentials);
-    const searchPath = await this.resolveSearchPath(loginProbe.cookie);
+    const searchPath = await this.resolveSearchPath({ Cookie: loginProbe.cookie });
 
     this.cached = {
       ...this.cached,
@@ -82,7 +82,7 @@ export class EndpointDiscovery {
     throw new AppError("DISCOVERY_FAILED", "Failed to discover ONES login endpoint");
   }
 
-  async resolveSearchPath(cookie: string): Promise<string> {
+  async resolveSearchPath(authHeaders: Record<string, string>): Promise<string> {
     if (this.cached.searchPath) {
       return this.cached.searchPath;
     }
@@ -92,7 +92,7 @@ export class EndpointDiscovery {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Cookie: cookie,
+          ...authHeaders,
         },
         body: JSON.stringify({ query: "", limit: 1 }),
       });
@@ -126,7 +126,10 @@ export class EndpointDiscovery {
     throw new AppError("DISCOVERY_FAILED", "Failed to discover ONES search endpoint");
   }
 
-  async resolveDocTemplate(docId: string, cookie: string): Promise<string> {
+  async resolveDocTemplate(
+    docId: string,
+    authHeaders: Record<string, string>,
+  ): Promise<string> {
     if (this.cached.docPathTemplate) {
       return this.cached.docPathTemplate;
     }
@@ -135,7 +138,7 @@ export class EndpointDiscovery {
       const path = template.replace("{docId}", encodeURIComponent(docId));
       const res = await this.fetchWithTimeout(path, {
         method: "GET",
-        headers: { Cookie: cookie },
+        headers: authHeaders,
       });
 
       if (res.status === 401) {
@@ -154,7 +157,10 @@ export class EndpointDiscovery {
     throw new AppError("DISCOVERY_FAILED", "Failed to discover ONES doc endpoint");
   }
 
-  async resolveRequirementTemplate(requirementId: string, cookie: string): Promise<string> {
+  async resolveRequirementTemplate(
+    requirementId: string,
+    authHeaders: Record<string, string>,
+  ): Promise<string> {
     if (this.cached.requirementPathTemplate) {
       return this.cached.requirementPathTemplate;
     }
@@ -166,7 +172,7 @@ export class EndpointDiscovery {
       );
       const res = await this.fetchWithTimeout(path, {
         method: "GET",
-        headers: { Cookie: cookie },
+        headers: authHeaders,
       });
 
       if (res.status === 401) {

@@ -4,7 +4,9 @@ import { OnesClient } from "../src/ones-client";
 
 it("returns latest linked doc content for requirement hash", async () => {
   const sessions = {
-    getValidCookie: vi.fn<() => Promise<string>>().mockResolvedValue("sid=ok"),
+    getValidAuthHeaders: vi
+      .fn<() => Promise<Record<string, string>>>()
+      .mockResolvedValue({ Authorization: "Bearer ok" }),
     invalidate: vi.fn(),
   };
 

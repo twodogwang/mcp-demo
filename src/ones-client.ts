@@ -4,7 +4,7 @@ import { logInfo } from "./logger.js";
 import { normalizeContent } from "./normalizer.js";
 
 export type SessionProvider = {
-  getValidCookie(): Promise<string>;
+  getValidAuthHeaders(): Promise<Record<string, string>>;
   invalidate(): void;
 };
 
@@ -40,8 +40,8 @@ export class OnesClient {
   ) {}
 
   async searchDocs(query: string, limit: number): Promise<SearchDocItem[]> {
-    const cookie = await this.sessions.getValidCookie();
-    const searchPath = await this.discovery.resolveSearchPath(cookie);
+    const authHeaders = await this.sessions.getValidAuthHeaders();
+    const searchPath = await this.discovery.resolveSearchPath(authHeaders);
 
     const data = await this.requestJson<Record<string, unknown>>(searchPath, {
       method: "POST",
@@ -63,8 +63,8 @@ export class OnesClient {
   }
 
   async getDoc(docId: string): Promise<DocDetail> {
-    const cookie = await this.sessions.getValidCookie();
-    const template = await this.discovery.resolveDocTemplate(docId, cookie);
+    const authHeaders = await this.sessions.getValidAuthHeaders();
+    const template = await this.discovery.resolveDocTemplate(docId, authHeaders);
     const path = template.replace("{docId}", encodeURIComponent(docId));
 
     const data = await this.requestJson<Record<string, unknown>>(path, { method: "GET" });
@@ -86,11 +86,41 @@ export class OnesClient {
     };
   }
 
+  async getPageDoc(teamId: string, pageId: string): Promise<DocDetail> {
+    const infoPath = `/wiki/api/wiki/team/${encodeURIComponent(teamId)}/page/${encodeURIComponent(pageId)}/info`;
+    const contentPath = `/wiki/api/wiki/team/${encodeURIComponent(teamId)}/online_page/${encodeURIComponent(pageId)}/content`;
+
+    const infoData = await this.requestJson<Record<string, unknown>>(infoPath, {
+      method: "GET",
+    });
+    const contentData = await this.requestJson<Record<string, unknown>>(contentPath, {
+      method: "GET",
+    });
+
+    const rawContent =
+      typeof contentData.content === "string"
+        ? contentData.content
+        : typeof contentData.body === "string"
+          ? contentData.body
+          : "";
+
+    return {
+      id: String(infoData.id ?? pageId),
+      title: String(infoData.title ?? infoData.name ?? pageId),
+      content: normalizeContent(rawContent, this.cfg.maxContentChars),
+      updated_at: infoData.updated_at
+        ? String(infoData.updated_at)
+        : infoData.updatedAt
+          ? String(infoData.updatedAt)
+          : undefined,
+    };
+  }
+
   async getDocByRequirementId(requirementId: string): Promise<DocDetail> {
-    const cookie = await this.sessions.getValidCookie();
+    const authHeaders = await this.sessions.getValidAuthHeaders();
     const reqTemplate = await this.discovery.resolveRequirementTemplate(
       requirementId,
-      cookie,
+      authHeaders,
     );
 
     const reqPath = reqTemplate.replace(
@@ -170,7 +200,7 @@ export class OnesClient {
   ): Promise<T> {
     const requestId = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
     const startedAt = Date.now();
-    const cookie = await this.sessions.getValidCookie();
+    const authHeaders = await this.sessions.getValidAuthHeaders();
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), this.cfg.timeoutMs);
 
@@ -179,7 +209,7 @@ export class OnesClient {
         ...init,
         headers: {
           ...(init.headers ?? {}),
-          Cookie: cookie,
+          ...authHeaders,
         },
         signal: controller.signal,
       });

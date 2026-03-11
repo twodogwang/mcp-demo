@@ -2,11 +2,11 @@ import { expect, it, vi } from "vitest";
 import { OnesClient } from "../src/ones-client";
 
 it("re-login once on 401 then succeeds", async () => {
-  const getValidCookie = vi
-    .fn<() => Promise<string>>()
-    .mockResolvedValueOnce("sid=old")
-    .mockResolvedValueOnce("sid=new")
-    .mockResolvedValueOnce("sid=new");
+  const getValidAuthHeaders = vi
+    .fn<() => Promise<Record<string, string>>>()
+    .mockResolvedValueOnce({ Authorization: "Bearer old" })
+    .mockResolvedValueOnce({ Authorization: "Bearer new" })
+    .mockResolvedValueOnce({ Authorization: "Bearer new" });
   const invalidate = vi.fn();
 
   const fetchMock = vi
@@ -27,7 +27,7 @@ it("re-login once on 401 then succeeds", async () => {
       timeoutMs: 5000,
       maxContentChars: 20000,
     },
-    { getValidCookie, invalidate },
+    { getValidAuthHeaders, invalidate },
     {
       resolveSearchPath: vi.fn().mockResolvedValue("/api/wiki/search"),
       resolveDocTemplate: vi.fn(),
@@ -38,5 +38,5 @@ it("re-login once on 401 then succeeds", async () => {
   const result = await client.searchDocs("k", 5);
   expect(result).toEqual([]);
   expect(invalidate).toHaveBeenCalledTimes(1);
-  expect(getValidCookie).toHaveBeenCalledTimes(3);
+  expect(getValidAuthHeaders).toHaveBeenCalledTimes(3);
 });
