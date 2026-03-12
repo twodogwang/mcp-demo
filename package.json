@@ -1,6 +1,6 @@
 {
   "name": "@ranjatai/get-doc-content",
-  "version": "1.0.6",
+  "version": "1.0.7",
   "description": "MCP server for fetching ONES linked document content from URL or requirement hash",
   "main": "dist/src/index.js",
   "bin": {
