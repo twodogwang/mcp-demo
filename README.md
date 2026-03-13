@@ -44,62 +44,6 @@ MCP 客户端配置示例：
 }
 ```
 
-## 本地开发
-
-```bash
-npm install
-npm run dev
-```
-
-## 构建运行
-
-```bash
-npm run build
-npm run start
-```
-
-## 测试
-
-```bash
-npm run test
-```
-
-## GitHub Actions 发布 npm
-
-仓库已提供工作流：`.github/workflows/publish-npm.yml`。
-
-触发方式：
-- 推送语义化版本 tag（如 `v1.0.0`）
-
-发布前准备：
-1. 在 npm 包页面启用 Trusted Publishing（OIDC）并添加 GitHub 仓库信任关系：
-   - Owner/Repo：`twodogwang/mcp-demo`
-   - Workflow file：`.github/workflows/publish-npm.yml`
-   - Environment：留空（当前 workflow 未使用 `environment`）
-2. 确保 `package.json` 的 `version` 与 tag 一致（例如 `version=0.1.2` 对应 tag `v0.1.2`）。
-3. 无需配置 `NPM_TOKEN` Secret。
-4. 该 workflow 使用 Node `22.14.0` 以满足 npm Trusted Publishing 的最低版本要求。
-
-首次发布 `1.0.0` 推荐流程：
-
-```bash
-npm run test
-npm run build
-npx bumpp 1.0.0 --all --commit --tag --no-push --no-verify --yes
-git push origin main --follow-tags
-```
-
-后续常规发布流程：
-
-```bash
-npm run test
-npm run build
-npm run release:patch   # 或 release:minor / release:major
-git push origin main --follow-tags
-```
-
-工作流会执行：`npm ci` -> `npm test` -> `npm run build` -> `npm publish --access public --provenance`（通过 GitHub OIDC 获取 npm 发布权限）。
-
 ## MCP 工具
 
 ### 1) `search_docs`
@@ -125,12 +69,14 @@ git push origin main --follow-tags
 - 按 `updated_at` 取最新一篇（缺失时回退 `created_at`）；
 - 返回该文档正文。
 
-## Smoke 命令
+示例：
 
-```bash
-node scripts/smoke.mjs "ONES"
-node scripts/smoke.mjs "https://ones.example.internal/wiki/#/doc/abc"
-node scripts/smoke.mjs "#12345"
+```json
+{"ref":"https://ones.example.internal/wiki/#/team/TEAM_ID/space/SPACE_ID/page/PAGE_ID"}
+```
+
+```json
+{"ref":"#12345"}
 ```
 
 ## 常见问题
