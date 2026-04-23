@@ -4,12 +4,7 @@ export type DocumentSource = {
 };
 
 export function detectDocumentSource(payload: Record<string, unknown>): DocumentSource {
-  const raw =
-    typeof payload.content === "string"
-      ? payload.content
-      : typeof payload.body === "string"
-        ? payload.body
-        : "";
+  const raw = String(payload.content ?? payload.body ?? "");
 
   if (looksLikeRichTextJson(raw)) {
     return { raw, format: "richtext-json" };

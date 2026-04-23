@@ -17,4 +17,9 @@ describe("detectDocumentSource", () => {
       }).format,
     ).toBe("richtext-json");
   });
+
+  it("keeps String coercion semantics for non-string content", () => {
+    expect(detectDocumentSource({ content: 123 }).raw).toBe("123");
+    expect(detectDocumentSource({ content: { a: 1 } }).raw).toBe("[object Object]");
+  });
 });
