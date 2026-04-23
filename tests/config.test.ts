@@ -10,6 +10,10 @@ const keys = [
   "ONES_DOC_PATH_TEMPLATE",
   "ONES_TIMEOUT_MS",
   "ONES_MAX_CONTENT_CHARS",
+  "ONES_OCR_PROVIDER",
+  "ONES_OCR_ENDPOINT",
+  "ONES_OCR_API_KEY",
+  "ONES_OCR_TIMEOUT_MS",
 ] as const;
 
 afterEach(() => {
@@ -32,5 +36,22 @@ describe("loadConfig", () => {
     expect("loginPath" in cfg).toBe(false);
     expect("searchPath" in cfg).toBe(false);
     expect("docPathTemplate" in cfg).toBe(false);
+  });
+
+  it("exposes ocr config with defaults and trims empty strings to null", () => {
+    process.env.ONES_BASE_URL = "https://ones.example.internal";
+    process.env.ONES_USERNAME = "u";
+    process.env.ONES_PASSWORD = "p";
+    process.env.ONES_OCR_PROVIDER = "";
+    process.env.ONES_OCR_ENDPOINT = " ";
+    process.env.ONES_OCR_API_KEY = "";
+
+    const cfg = loadConfig();
+
+    expect(cfg.ocr).toBeDefined();
+    expect(cfg.ocr.timeoutMs).toBe(15000);
+    expect(cfg.ocr.provider).toBeNull();
+    expect(cfg.ocr.endpoint).toBeNull();
+    expect(cfg.ocr.apiKey).toBeNull();
   });
 });

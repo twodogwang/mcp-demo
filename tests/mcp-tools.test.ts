@@ -26,5 +26,7 @@ describe("mcp tool list", () => {
     expect(schema.required).toEqual(["ref"]);
     expect(schema.properties?.view?.enum).toEqual(["llm", "human", "both"]);
     expect(schema.properties?.view?.default).toBe("llm");
+    expect(schema.properties?.include_raw?.default).toBe(false);
+    expect(schema.properties?.include_resources?.default).toBe(true);
   });
 });
