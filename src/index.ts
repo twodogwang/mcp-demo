@@ -36,6 +36,13 @@ export function buildToolList(): Tool[] {
         type: "object",
         properties: {
           ref: { type: "string" },
+          view: {
+            type: "string",
+            enum: ["llm", "human", "both"],
+            default: "llm",
+          },
+          include_raw: { type: "boolean", default: false },
+          include_resources: { type: "boolean", default: true },
         },
         required: ["ref"],
       },
