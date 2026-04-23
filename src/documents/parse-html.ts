@@ -100,7 +100,7 @@ function parseBlockChildren(
       continue;
     }
 
-    result.push(...parseBlockChildren(node.childNodes, basePath, state));
+    result.push(...parseBlockChildren(node.childNodes, nextPath, state));
   }
 
   return result;

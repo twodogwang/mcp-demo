@@ -16,6 +16,14 @@ describe("parseHtmlDocument", () => {
       </table>
     `);
 
+    const heading = doc.children[0];
+    expect(heading?.type).toBe("heading");
+    if (heading?.type !== "heading") {
+      throw new Error("expected heading node");
+    }
+    expect(heading.level).toBe(1);
+    expect(heading.children).toEqual([{ type: "text", value: "权限矩阵" }]);
+
     expect(doc.children[1]?.type).toBe("table");
     const table = doc.children[1];
     expect(table?.type).toBe("table");
@@ -33,6 +41,28 @@ describe("parseHtmlDocument", () => {
       type: "image",
       src: "https://img.example/1.png",
       alt: "流程图",
+    });
+  });
+
+  it("preserves wrapper hierarchy in node paths", () => {
+    const doc = parseHtmlDocument(`
+      <div>
+        <section>
+          <p>嵌套段落</p>
+        </section>
+      </div>
+      <p>同级段落</p>
+    `);
+
+    expect(doc.children[0]).toMatchObject({
+      type: "paragraph",
+      children: [{ type: "text", value: "嵌套段落" }],
+      path: "root/0/0/0",
+    });
+    expect(doc.children[1]).toMatchObject({
+      type: "paragraph",
+      children: [{ type: "text", value: "同级段落" }],
+      path: "root/1",
     });
   });
 });
