@@ -11,9 +11,11 @@ describe("mcp tool list", () => {
     const getDoc = buildToolList().find((t) => t.name === "get_doc");
     const schema = getDoc?.inputSchema as {
       required?: string[];
+      properties?: Record<string, { minLength?: number }>;
     };
 
     expect(schema.required).toEqual(["ref"]);
+    expect(schema.properties?.ref?.minLength).toBe(1);
   });
 
   it("get_doc accepts view/include_raw/include_resources and defaults to llm", () => {
@@ -27,6 +29,7 @@ describe("mcp tool list", () => {
     };
 
     expect(schema.required).toEqual(["ref"]);
+    expect(getDoc?.description).toContain("reserved for future structured output");
     expect(schema.properties?.view?.enum).toEqual(["llm", "human", "both"]);
     expect(schema.properties?.view?.default).toBe("llm");
     expect(schema.properties).toHaveProperty("include_raw");
@@ -65,5 +68,6 @@ describe("mcp tool list", () => {
         include_raw: "true",
       }),
     ).toThrow();
+    expect(() => parseGetDocInput({ ref: "" })).toThrow();
   });
 });

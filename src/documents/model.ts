@@ -1,6 +1,6 @@
 export type GetDocView = "llm" | "human" | "both";
 
-export type GetDocInput = {
+export type GetDocOptionInput = {
   view: GetDocView;
   include_raw: boolean;
   include_resources: boolean;
@@ -12,7 +12,7 @@ export type GetDocOptions = {
   includeResources: boolean;
 };
 
-export function toGetDocOptions(input: GetDocInput): GetDocOptions {
+export function toGetDocOptions(input: GetDocOptionInput): GetDocOptions {
   return {
     view: input.view,
     includeRaw: input.include_raw,

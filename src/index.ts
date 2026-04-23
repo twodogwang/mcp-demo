@@ -42,11 +42,12 @@ export function buildToolList(): Tool[] {
     },
     {
       name: "get_doc",
-      description: "Get ONES doc by context ref (URL or #requirement)",
+      description:
+        "Get ONES doc by context ref (URL or #requirement). view/include_raw/include_resources are reserved for future structured output and may not affect current response.",
       inputSchema: {
         type: "object",
         properties: {
-          ref: { type: "string" },
+          ref: { type: "string", minLength: 1 },
           view: {
             type: "string",
             enum: ["llm", "human", "both"],
