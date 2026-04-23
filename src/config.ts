@@ -25,7 +25,15 @@ function optionalGet(key: string): string | null {
   if (!value || value.trim() === "") {
     return null;
   }
-  return value;
+  return value.trim();
+}
+
+function optionalNumberGet(key: string, fallback: number): number {
+  const value = process.env[key];
+  if (!value || value.trim() === "") {
+    return fallback;
+  }
+  return Number(value);
 }
 
 export function loadConfig(): AppConfig {
@@ -33,13 +41,13 @@ export function loadConfig(): AppConfig {
     baseUrl: mustGet("ONES_BASE_URL"),
     username: mustGet("ONES_USERNAME"),
     password: mustGet("ONES_PASSWORD"),
-    timeoutMs: Number(process.env.ONES_TIMEOUT_MS ?? 15000),
-    maxContentChars: Number(process.env.ONES_MAX_CONTENT_CHARS ?? 20000),
+    timeoutMs: optionalNumberGet("ONES_TIMEOUT_MS", 15000),
+    maxContentChars: optionalNumberGet("ONES_MAX_CONTENT_CHARS", 20000),
     ocr: {
       provider: optionalGet("ONES_OCR_PROVIDER"),
       endpoint: optionalGet("ONES_OCR_ENDPOINT"),
       apiKey: optionalGet("ONES_OCR_API_KEY"),
-      timeoutMs: Number(process.env.ONES_OCR_TIMEOUT_MS ?? 15000),
+      timeoutMs: optionalNumberGet("ONES_OCR_TIMEOUT_MS", 15000),
     },
   };
 }

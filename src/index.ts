@@ -15,6 +15,17 @@ import { EndpointDiscovery } from "./discovery/endpoint-discovery.js";
 import { OnesClient } from "./ones-client.js";
 import { parseRef } from "./ref-parser.js";
 
+const getDocInputSchema = z.object({
+  ref: z.string().min(1),
+  view: z.enum(["llm", "human", "both"]).default("llm"),
+  include_raw: z.boolean().default(false),
+  include_resources: z.boolean().default(true),
+});
+
+export function parseGetDocInput(input: unknown) {
+  return getDocInputSchema.parse(input);
+}
+
 export function buildToolList(): Tool[] {
   return [
     {
@@ -103,11 +114,7 @@ export function createServer() {
     }
 
     if (request.params.name === "get_doc") {
-      const input = z
-        .object({
-          ref: z.string().min(1),
-        })
-        .parse(request.params.arguments ?? {});
+      const input = parseGetDocInput(request.params.arguments ?? {});
 
       const parsed = parseRef(input.ref, new URL(cfg.baseUrl).host);
       const doc =
