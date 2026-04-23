@@ -86,4 +86,27 @@ describe("loadConfig", () => {
     expect(cfg.ocr.endpoint).toBe("https://ocr.example.internal");
     expect(cfg.ocr.apiKey).toBe("secret-key");
   });
+
+  it("trims required env values before using them", () => {
+    process.env.ONES_BASE_URL = " https://ones.example.internal ";
+    process.env.ONES_USERNAME = " user ";
+    process.env.ONES_PASSWORD = " pass ";
+
+    const cfg = loadConfig();
+
+    expect(cfg.baseUrl).toBe("https://ones.example.internal");
+    expect(cfg.username).toBe("user");
+    expect(cfg.password).toBe("pass");
+  });
+
+  it("throws clear error when numeric env is not a finite number", () => {
+    process.env.ONES_BASE_URL = "https://ones.example.internal";
+    process.env.ONES_USERNAME = "u";
+    process.env.ONES_PASSWORD = "p";
+    process.env.ONES_TIMEOUT_MS = "not-a-number";
+
+    expect(() => loadConfig()).toThrowError(
+      "Invalid numeric env: ONES_TIMEOUT_MS, got: not-a-number",
+    );
+  });
 });

@@ -17,7 +17,7 @@ function mustGet(key: string, fallback?: string): string {
       `Missing required env: ${key}. Required envs: ONES_BASE_URL, ONES_USERNAME, ONES_PASSWORD`,
     );
   }
-  return value;
+  return value.trim();
 }
 
 function optionalGet(key: string): string | null {
@@ -33,7 +33,11 @@ function optionalNumberGet(key: string, fallback: number): number {
   if (!value || value.trim() === "") {
     return fallback;
   }
-  return Number(value);
+  const parsed = Number(value.trim());
+  if (!Number.isFinite(parsed)) {
+    throw new Error(`Invalid numeric env: ${key}, got: ${value.trim()}`);
+  }
+  return parsed;
 }
 
 export function loadConfig(): AppConfig {
