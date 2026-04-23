@@ -49,9 +49,11 @@ describe("loadConfig", () => {
     const cfg = loadConfig();
 
     expect(cfg.ocr).toBeDefined();
-    expect(cfg.ocr.timeoutMs).toBe(15000);
-    expect(cfg.ocr.provider).toBeNull();
-    expect(cfg.ocr.endpoint).toBeNull();
-    expect(cfg.ocr.apiKey).toBeNull();
+    expect(cfg.ocr).toEqual({
+      provider: null,
+      endpoint: null,
+      apiKey: null,
+      timeoutMs: 15000,
+    });
   });
 });
