@@ -37,6 +37,9 @@
   "bugs": {
     "url": "https://github.com/twodogwang/mcp-demo/issues"
   },
+  "engines": {
+    "node": ">=20.19.0"
+  },
   "publishConfig": {
     "access": "public"
   },

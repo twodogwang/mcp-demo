@@ -65,4 +65,53 @@ describe("parseHtmlDocument", () => {
       path: "root/1",
     });
   });
+
+  it("keeps inline wrapper text in one paragraph", () => {
+    const doc = parseHtmlDocument("<div>Hello <span>world</span></div>");
+
+    expect(doc.children).toEqual([
+      {
+        type: "paragraph",
+        children: [{ type: "text", value: "Hello world" }],
+        path: "root/0",
+      },
+    ]);
+  });
+
+  it("converts br into inline text break before whitespace normalization", () => {
+    const doc = parseHtmlDocument("<p>第一行<br>第二行</p>");
+
+    expect(doc.children).toEqual([
+      {
+        type: "paragraph",
+        children: [{ type: "text", value: "第一行 第二行" }],
+        path: "root/0",
+      },
+    ]);
+  });
+
+  it("skips image nodes without src", () => {
+    const doc = parseHtmlDocument(`
+      <img alt="没有地址">
+      <img src="">
+      <img src="   ">
+      <img src="https://img.example/ok.png">
+    `);
+
+    expect(doc.children).toEqual([
+      {
+        type: "image",
+        resourceRef: "res-image-0",
+        path: "root/0",
+      },
+    ]);
+    expect(doc.resources).toEqual([
+      {
+        id: "res-image-0",
+        type: "image",
+        src: "https://img.example/ok.png",
+        alt: null,
+      },
+    ]);
+  });
 });
