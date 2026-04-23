@@ -1,5 +1,6 @@
 import "dotenv/config";
 import type { OcrConfig } from "./documents/model.js";
+export type { OcrConfig } from "./documents/model.js";
 
 export type AppConfig = {
   baseUrl: string;
