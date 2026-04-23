@@ -1,4 +1,5 @@
 import type { EndpointDiscovery } from "./discovery/endpoint-discovery.js";
+import { detectDocumentSource } from "./documents/source.js";
 import { AppError } from "./errors.js";
 import { logInfo } from "./logger.js";
 import { normalizeContent } from "./normalizer.js";
@@ -68,11 +69,9 @@ export class OnesClient {
     const path = template.replace("{docId}", encodeURIComponent(docId));
 
     const data = await this.requestJson<Record<string, unknown>>(path, { method: "GET" });
+    const source = detectDocumentSource(data);
 
-    const content = normalizeContent(
-      String(data.content ?? data.body ?? ""),
-      this.cfg.maxContentChars,
-    );
+    const content = normalizeContent(source.raw, this.cfg.maxContentChars);
 
     return {
       id: String(data.id ?? docId),
