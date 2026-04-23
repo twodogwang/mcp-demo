@@ -2,6 +2,45 @@ import { describe, expect, it } from "vitest";
 import { parseRichTextDocument } from "../../src/documents/parse-rich-text";
 
 describe("parseRichTextDocument", () => {
+  it("returns empty document when raw is invalid json", () => {
+    const doc = parseRichTextDocument("{not-valid-json");
+
+    expect(doc).toEqual({
+      children: [],
+      resources: [],
+    });
+  });
+
+  it("returns empty document when blocks is not an array", () => {
+    const doc = parseRichTextDocument(
+      JSON.stringify({
+        blocks: "not-array",
+      }),
+    );
+
+    expect(doc).toEqual({
+      children: [],
+      resources: [],
+    });
+  });
+
+  it("parses heading level from string", () => {
+    const doc = parseRichTextDocument(
+      JSON.stringify({
+        blocks: [{ type: "heading", level: "2", text: [{ insert: "二级标题" }] }],
+      }),
+    );
+
+    expect(doc.children).toEqual([
+      {
+        type: "heading",
+        level: 2,
+        children: [{ type: "text", value: "二级标题" }],
+        path: "root/0",
+      },
+    ]);
+  });
+
   it("maps rich-text blocks into headings, paragraphs, and images", () => {
     const doc = parseRichTextDocument(
       JSON.stringify({

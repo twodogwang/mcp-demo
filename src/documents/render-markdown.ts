@@ -37,6 +37,11 @@ function renderTable(node: Extract<DocumentNode, { type: "table" }>): string {
     return `[复杂表格，详见原文（${node.path}）]`;
   }
 
+  const expectedColumns = matrix[0]?.length ?? 0;
+  if (expectedColumns === 0 || matrix.some((row) => row.length !== expectedColumns)) {
+    return `[复杂表格，详见原文（${node.path}）]`;
+  }
+
   const header = matrix[0] ?? [];
   const bodyRows = matrix.slice(1);
   const headerLine = `| ${header.join(" | ")} |`;

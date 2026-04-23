@@ -25,8 +25,11 @@ type ParseState = {
 };
 
 export function parseRichTextDocument(raw: string): ParsedDocument {
-  const payload = JSON.parse(raw) as RichTextPayload;
-  return walkRichTextBlocks(payload.blocks ?? []);
+  const payload = safeParseRichTextPayload(raw);
+  if (!payload || !Array.isArray(payload.blocks)) {
+    return emptyDocument();
+  }
+  return walkRichTextBlocks(payload.blocks);
 }
 
 function walkRichTextBlocks(blocks: unknown[]): ParsedDocument {
@@ -62,9 +65,10 @@ function parseBlock(block: unknown, path: string, state: ParseState): DocumentNo
     if (children.length === 0) {
       return null;
     }
+    const level = typeof typed.level === "number" || typeof typed.level === "string" ? typed.level : 1;
     return {
       type: "heading",
-      level: normalizeHeadingLevel(typed.level),
+      level: normalizeHeadingLevel(level),
       children,
       path,
     };
@@ -135,12 +139,32 @@ function readInsertValue(fragment: unknown): string {
   return typeof typed.insert === "string" ? typed.insert : "";
 }
 
-function normalizeHeadingLevel(level: unknown): number {
-  if (typeof level !== "number" || !Number.isFinite(level)) {
+function normalizeHeadingLevel(level: number | string): number {
+  const parsed = typeof level === "number" ? level : Number(level);
+  if (!Number.isFinite(parsed)) {
     return 1;
   }
 
-  return Math.max(1, Math.min(6, Math.trunc(level)));
+  return Math.max(1, Math.min(6, Math.trunc(parsed)));
+}
+
+function safeParseRichTextPayload(raw: string): RichTextPayload | null {
+  try {
+    const payload = JSON.parse(raw);
+    if (!payload || typeof payload !== "object") {
+      return null;
+    }
+    return payload as RichTextPayload;
+  } catch {
+    return null;
+  }
+}
+
+function emptyDocument(): ParsedDocument {
+  return {
+    children: [],
+    resources: [],
+  };
 }
 
 function normalizeWhitespace(value: string): string {
