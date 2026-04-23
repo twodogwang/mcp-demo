@@ -75,6 +75,11 @@ function parseBlockChildren(
     }
 
     if (tagName === "p") {
+      if (hasDescendantTag(node, "img")) {
+        result.push(...parseBlockChildren(node.childNodes, nextPath, state));
+        continue;
+      }
+
       const children = parseInlineChildren(node);
       if (children.length === 0) {
         continue;
@@ -274,6 +279,24 @@ function hasBlockDescendant(parent: HtmlParent): boolean {
     }
 
     if (hasBlockDescendant(child)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function hasDescendantTag(parent: HtmlParent, targetTagName: string): boolean {
+  for (const child of parent.childNodes) {
+    if (!isElement(child)) {
+      continue;
+    }
+
+    if (child.tagName.toLowerCase() === targetTagName) {
+      return true;
+    }
+
+    if (hasDescendantTag(child, targetTagName)) {
       return true;
     }
   }

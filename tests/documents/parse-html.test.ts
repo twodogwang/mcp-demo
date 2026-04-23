@@ -114,4 +114,62 @@ describe("parseHtmlDocument", () => {
       },
     ]);
   });
+
+  it("keeps images inside paragraph nodes as block children", () => {
+    const doc = parseHtmlDocument(`
+      <p><img src="https://img.example/p.png" alt="段落图"></p>
+      <p>前文<img src="https://img.example/inline.png">后文</p>
+    `);
+
+    expect(doc.children).toEqual([
+      {
+        type: "image",
+        resourceRef: "res-image-0",
+        path: "root/0/0",
+      },
+      {
+        type: "paragraph",
+        children: [{ type: "text", value: "前文" }],
+        path: "root/1/0",
+      },
+      {
+        type: "image",
+        resourceRef: "res-image-1",
+        path: "root/1/1",
+      },
+      {
+        type: "paragraph",
+        children: [{ type: "text", value: "后文" }],
+        path: "root/1/2",
+      },
+    ]);
+    expect(doc.resources).toEqual([
+      {
+        id: "res-image-0",
+        type: "image",
+        src: "https://img.example/p.png",
+        alt: "段落图",
+      },
+      {
+        id: "res-image-1",
+        type: "image",
+        src: "https://img.example/inline.png",
+        alt: null,
+      },
+    ]);
+  });
+
+  it("does not preserve images nested inside headings", () => {
+    const doc = parseHtmlDocument("<h2>标题<img src=\"https://img.example/in-heading.png\"></h2>");
+
+    expect(doc.children).toEqual([
+      {
+        type: "heading",
+        level: 2,
+        children: [{ type: "text", value: "标题" }],
+        path: "root/0",
+      },
+    ]);
+    expect(doc.resources).toEqual([]);
+  });
 });
