@@ -50,12 +50,34 @@ it("returns latest linked doc content for requirement hash", async () => {
       baseUrl: "https://ones.example.internal",
       timeoutMs: 5000,
       maxContentChars: 20000,
+      ocr: {
+        provider: null,
+        endpoint: null,
+        apiKey: null,
+        timeoutMs: 1000,
+      },
     } as any,
     sessions as any,
     discovery as any,
   );
 
   const out = await client.getDocByRequirementId("12345");
-  expect(out.id).toBe("D-2");
-  expect(out.content).toBe("Hello ONES");
+  expect(out).toMatchObject({
+    doc: {
+      id: "D-2",
+      title: "Latest",
+      source_format: "html",
+    },
+    llm_view: {
+      type: "document",
+      source_format: "html",
+      children: [
+        {
+          type: "paragraph",
+          children: [{ type: "text", value: "Hello ONES" }],
+        },
+      ],
+    },
+  });
+  expect(out.human_view).toBeUndefined();
 });
