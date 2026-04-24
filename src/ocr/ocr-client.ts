@@ -1,12 +1,8 @@
 import type { OcrConfig } from "../config.js";
+import type { DocumentResourceOcr, OcrBlock } from "../documents/model.js";
 
 export type OcrResult =
-  | {
-      status: "ok";
-      text: string;
-      blocks: Array<{ text: string; bbox?: number[] }>;
-    }
-  | { status: "failed"; error: string }
+  | DocumentResourceOcr
   | { status: "skipped"; reason: string };
 
 type OcrImage = {
@@ -26,12 +22,12 @@ function toErrorMessage(error: unknown): string {
   return String(error);
 }
 
-function normalizeBlocks(input: unknown): Array<{ text: string; bbox?: number[] }> {
+function normalizeBlocks(input: unknown): OcrBlock[] {
   if (!Array.isArray(input)) {
     return [];
   }
 
-  const blocks: Array<{ text: string; bbox?: number[] }> = [];
+  const blocks: OcrBlock[] = [];
   for (const item of input) {
     if (!item || typeof item !== "object") {
       continue;
@@ -40,9 +36,9 @@ function normalizeBlocks(input: unknown): Array<{ text: string; bbox?: number[] 
     if (typeof text !== "string") {
       continue;
     }
-    const block: { text: string; bbox?: number[] } = { text };
+    const block: OcrBlock = { text };
     if ("bbox" in item && Array.isArray(item.bbox)) {
-      const bbox = item.bbox.filter((value) => typeof value === "number");
+      const bbox = item.bbox.filter((value: unknown): value is number => typeof value === "number");
       if (bbox.length > 0) {
         block.bbox = bbox;
       }

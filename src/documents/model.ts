@@ -27,17 +27,43 @@ export type OcrConfig = {
   timeoutMs: number;
 };
 
+export type DocumentSourceFormat = "html" | "richtext-json" | "plain";
+
+export type OcrBlock = {
+  text: string;
+  bbox?: number[];
+};
+
+export type DocumentResourceOcr =
+  | {
+      status: "ok";
+      text: string;
+      blocks: OcrBlock[];
+    }
+  | { status: "failed"; error: string };
+
 export type InlineNode = {
   type: "text";
   value: string;
 };
 
-export type DocumentResource = {
+type BaseDocumentResource = {
   id: string;
-  type: "image";
   src: string;
   alt: string | null;
 };
+
+export type DocumentImageResource = BaseDocumentResource & {
+  type: "image";
+  ocr?: DocumentResourceOcr;
+};
+
+export type DocumentEmbedResource = BaseDocumentResource & {
+  type: "embed";
+  embedType: string;
+};
+
+export type DocumentResource = DocumentImageResource | DocumentEmbedResource;
 
 export type TableCellNode = {
   colspan: number;
@@ -58,4 +84,34 @@ export type DocumentNode =
 export type ParsedDocument = {
   children: DocumentNode[];
   resources: DocumentResource[];
+};
+
+export type LlmDocumentView = {
+  type: "document";
+  source_format: DocumentSourceFormat;
+  children: DocumentNode[];
+  resources?: DocumentResource[];
+};
+
+export type HumanDocumentView = {
+  format: "markdown";
+  content: string;
+};
+
+export type DocMetadata = {
+  id: string;
+  title: string;
+  updated_at?: string;
+  source_format: DocumentSourceFormat;
+};
+
+export type RawDocumentView = {
+  content: string;
+};
+
+export type DocDetail = {
+  doc: DocMetadata;
+  llm_view?: LlmDocumentView;
+  human_view?: HumanDocumentView;
+  raw?: RawDocumentView;
 };

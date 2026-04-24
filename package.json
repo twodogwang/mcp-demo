@@ -18,6 +18,8 @@
   "scripts": {
     "test": "vitest run",
     "dev": "tsx src/index.ts",
+    "debug:page": "tsx scripts/debug-page.ts",
+    "eval:llm": "tsx scripts/eval-llm.ts",
     "clean": "rm -rf dist",
     "build": "npm run clean && tsc -p tsconfig.json",
     "prepack": "npm run build",

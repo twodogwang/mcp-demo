@@ -29,7 +29,7 @@ describe("mcp tool list", () => {
     };
 
     expect(schema.required).toEqual(["ref"]);
-    expect(getDoc?.description).toContain("reserved for future structured output");
+    expect(getDoc?.description).toContain("llm/human structured views");
     expect(schema.properties?.view?.enum).toEqual(["llm", "human", "both"]);
     expect(schema.properties?.view?.default).toBe("llm");
     expect(schema.properties).toHaveProperty("include_raw");

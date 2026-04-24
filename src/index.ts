@@ -12,6 +12,7 @@ import { z } from "zod";
 import { SessionManager } from "./auth/session-manager.js";
 import { loadConfig } from "./config.js";
 import { EndpointDiscovery } from "./discovery/endpoint-discovery.js";
+import { toGetDocOptions } from "./documents/model.js";
 import { OnesClient } from "./ones-client.js";
 import { parseRef } from "./ref-parser.js";
 
@@ -43,7 +44,7 @@ export function buildToolList(): Tool[] {
     {
       name: "get_doc",
       description:
-        "Get ONES doc by context ref (URL or #requirement). view/include_raw/include_resources are reserved for future structured output and may not affect current response.",
+        "Get ONES doc by context ref (URL or #requirement) and return llm/human structured views.",
       inputSchema: {
         type: "object",
         properties: {
@@ -78,6 +79,7 @@ export function createServer() {
       baseUrl: cfg.baseUrl,
       timeoutMs: cfg.timeoutMs,
       maxContentChars: cfg.maxContentChars,
+      ocr: cfg.ocr,
     },
     sessions,
     discovery,
@@ -116,14 +118,15 @@ export function createServer() {
 
     if (request.params.name === "get_doc") {
       const input = parseGetDocInput(request.params.arguments ?? {});
+      const options = toGetDocOptions(input);
 
       const parsed = parseRef(input.ref, new URL(cfg.baseUrl).host);
       const doc =
         parsed.kind === "doc"
-          ? await client.getDoc(parsed.docId)
+          ? await client.getDoc(parsed.docId, options)
           : parsed.kind === "page"
-            ? await client.getPageDoc(parsed.teamId, parsed.pageId)
-            : await client.getDocByRequirementId(parsed.requirementId);
+            ? await client.getPageDoc(parsed.teamId, parsed.pageId, options)
+            : await client.getDocByRequirementId(parsed.requirementId, options);
 
       return {
         content: [{ type: "text", text: JSON.stringify(doc, null, 2) }],
