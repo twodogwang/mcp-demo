@@ -2,7 +2,7 @@
   "defaultRef": "table-page",
   "rawChars": 1200,
   "refs": {
-    "table-page": "https://1s.oristand.com/wiki/#/team/63FL1oSZ/space/JhN6fj4M/page/KkVZSkGh",
+    "table-page": "https://ones.example.internal/wiki/#/team/TEAM_ID/space/SPACE_ID/page/PAGE_ID",
     "req-12345": "#12345"
   }
 }

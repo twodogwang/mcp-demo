@@ -171,8 +171,8 @@ describe("mcp e2e flow with mocked ones", () => {
 
   it("parses wiki page url and returns page content", async () => {
     const parsed = parseRef(
-      "https://1s.oristand.com/wiki/#/team/63FL1oSZ/space/JhN6fj4M/page/9Pkrzqbf",
-      "1s.oristand.com",
+      "https://ones.example.internal/wiki/#/team/63FL1oSZ/space/JhN6fj4M/page/9Pkrzqbf",
+      "ones.example.internal",
     );
     expect(parsed.kind).toBe("page");
 
@@ -234,7 +234,7 @@ describe("mcp e2e flow with mocked ones", () => {
 
     const client = new OnesClient(
       {
-        baseUrl: "https://1s.oristand.com",
+        baseUrl: "https://ones.example.internal",
         timeoutMs: 5000,
         maxContentChars: 20000,
         ocr: {
@@ -294,8 +294,8 @@ describe("mcp e2e flow with mocked ones", () => {
 
   it("renders wiki page human_view with absolute editor resource urls", async () => {
     const parsed = parseRef(
-      "https://1s.oristand.com/wiki/#/team/63FL1oSZ/space/JhN6fj4M/page/KkVZSkGh",
-      "1s.oristand.com",
+      "https://ones.example.internal/wiki/#/team/63FL1oSZ/space/JhN6fj4M/page/KkVZSkGh",
+      "ones.example.internal",
     );
     expect(parsed.kind).toBe("page");
 
@@ -345,7 +345,7 @@ describe("mcp e2e flow with mocked ones", () => {
 
     const client = new OnesClient(
       {
-        baseUrl: "https://1s.oristand.com",
+        baseUrl: "https://ones.example.internal",
         timeoutMs: 5000,
         maxContentChars: 20000,
         ocr: {
@@ -381,12 +381,12 @@ describe("mcp e2e flow with mocked ones", () => {
         id: "res-image-0",
         type: "embed",
         embedType: "image",
-        src: "https://1s.oristand.com/wiki/api/wiki/editor/63FL1oSZ/CyyFbXuD/resources/GtOawA3kTPPgoj6A6ZEFIXyTcK4XvrWNnIrlMl_878A.png",
+        src: "https://ones.example.internal/wiki/api/wiki/editor/63FL1oSZ/CyyFbXuD/resources/GtOawA3kTPPgoj6A6ZEFIXyTcK4XvrWNnIrlMl_878A.png",
         alt: "image",
       },
     ]);
     expect(doc.human_view?.content).toContain(
-      "![image](https://1s.oristand.com/wiki/api/wiki/editor/63FL1oSZ/CyyFbXuD/resources/GtOawA3kTPPgoj6A6ZEFIXyTcK4XvrWNnIrlMl_878A.png)",
+      "![image](https://ones.example.internal/wiki/api/wiki/editor/63FL1oSZ/CyyFbXuD/resources/GtOawA3kTPPgoj6A6ZEFIXyTcK4XvrWNnIrlMl_878A.png)",
     );
   });
 });

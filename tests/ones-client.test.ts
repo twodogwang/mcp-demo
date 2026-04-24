@@ -241,7 +241,7 @@ it("resolves relative wiki page resources to absolute editor resource urls", asy
 
   const client = new OnesClient(
     {
-      baseUrl: "https://1s.oristand.com",
+      baseUrl: "https://ones.example.internal",
       timeoutMs: 5000,
       maxContentChars: 20000,
       ocr: {
@@ -273,11 +273,11 @@ it("resolves relative wiki page resources to absolute editor resource urls", asy
       id: "res-image-0",
       type: "embed",
       embedType: "image",
-      src: "https://1s.oristand.com/wiki/api/wiki/editor/63FL1oSZ/CyyFbXuD/resources/GtOawA3kTPPgoj6A6ZEFIXyTcK4XvrWNnIrlMl_878A.png",
+      src: "https://ones.example.internal/wiki/api/wiki/editor/63FL1oSZ/CyyFbXuD/resources/GtOawA3kTPPgoj6A6ZEFIXyTcK4XvrWNnIrlMl_878A.png",
       alt: "image",
     },
   ]);
   expect(result.human_view?.content).toContain(
-    "![image](https://1s.oristand.com/wiki/api/wiki/editor/63FL1oSZ/CyyFbXuD/resources/GtOawA3kTPPgoj6A6ZEFIXyTcK4XvrWNnIrlMl_878A.png)",
+    "![image](https://ones.example.internal/wiki/api/wiki/editor/63FL1oSZ/CyyFbXuD/resources/GtOawA3kTPPgoj6A6ZEFIXyTcK4XvrWNnIrlMl_878A.png)",
   );
 });

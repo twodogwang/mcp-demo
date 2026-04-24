@@ -1,5 +1,8 @@
 #!/usr/bin/env node
 
+import { realpathSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import {
@@ -13,8 +16,14 @@ import { SessionManager } from "./auth/session-manager.js";
 import { loadConfig } from "./config.js";
 import { EndpointDiscovery } from "./discovery/endpoint-discovery.js";
 import { toGetDocOptions } from "./documents/model.js";
+import { getRuntimeEnvMeta, logError, logInfo, serializeError } from "./logger.js";
 import { OnesClient } from "./ones-client.js";
 import { parseRef } from "./ref-parser.js";
+
+type Runtime = {
+  cfg: ReturnType<typeof loadConfig>;
+  client: OnesClient;
+};
 
 const getDocInputSchema = z.object({
   ref: z.string().min(1),
@@ -22,6 +31,26 @@ const getDocInputSchema = z.object({
   include_raw: z.boolean().default(false),
   include_resources: z.boolean().default(true),
 });
+
+function defaultResolvePath(input: string): string {
+  return realpathSync(input);
+}
+
+export function isCliEntrypoint(
+  importMetaUrl: string,
+  argv1: string | undefined = process.argv[1],
+  resolvePath: (input: string) => string = defaultResolvePath,
+): boolean {
+  if (!argv1) {
+    return false;
+  }
+
+  try {
+    return resolvePath(fileURLToPath(importMetaUrl)) === resolvePath(argv1);
+  } catch {
+    return false;
+  }
+}
 
 export function parseGetDocInput(input: unknown) {
   return getDocInputSchema.parse(input);
@@ -64,26 +93,45 @@ export function buildToolList(): Tool[] {
 }
 
 export function createServer() {
-  const cfg = loadConfig();
-  const discovery = new EndpointDiscovery(cfg.baseUrl, cfg.timeoutMs);
+  let runtime: Runtime | null = null;
 
-  const sessions = new SessionManager({
-    baseUrl: cfg.baseUrl,
-    username: cfg.username,
-    password: cfg.password,
-    discovery,
-  });
+  const getRuntime = (): Runtime => {
+    if (runtime) {
+      return runtime;
+    }
 
-  const client = new OnesClient(
-    {
-      baseUrl: cfg.baseUrl,
-      timeoutMs: cfg.timeoutMs,
-      maxContentChars: cfg.maxContentChars,
-      ocr: cfg.ocr,
-    },
-    sessions,
-    discovery,
-  );
+    try {
+      const cfg = loadConfig();
+      const discovery = new EndpointDiscovery(cfg.baseUrl, cfg.timeoutMs);
+
+      const sessions = new SessionManager({
+        baseUrl: cfg.baseUrl,
+        username: cfg.username,
+        password: cfg.password,
+        discovery,
+      });
+
+      const client = new OnesClient(
+        {
+          baseUrl: cfg.baseUrl,
+          timeoutMs: cfg.timeoutMs,
+          maxContentChars: cfg.maxContentChars,
+          ocr: cfg.ocr,
+        },
+        sessions,
+        discovery,
+      );
+
+      runtime = { cfg, client };
+      return runtime;
+    } catch (error) {
+      logError("mcp.runtime.init.failed", {
+        ...getRuntimeEnvMeta(),
+        ...serializeError(error),
+      });
+      throw error;
+    }
+  };
 
   const server = new Server(
     {
@@ -102,55 +150,83 @@ export function createServer() {
   }));
 
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
-    if (request.params.name === "search_docs") {
-      const input = z
-        .object({
-          query: z.string().min(1),
-          limit: z.number().int().min(1).max(20).default(5),
-        })
-        .parse(request.params.arguments ?? {});
+    try {
+      if (request.params.name === "search_docs") {
+        const { client } = getRuntime();
+        const input = z
+          .object({
+            query: z.string().min(1),
+            limit: z.number().int().min(1).max(20).default(5),
+          })
+          .parse(request.params.arguments ?? {});
 
-      const items = await client.searchDocs(input.query, input.limit);
-      return {
-        content: [{ type: "text", text: JSON.stringify(items, null, 2) }],
-      };
+        const items = await client.searchDocs(input.query, input.limit);
+        return {
+          content: [{ type: "text", text: JSON.stringify(items, null, 2) }],
+        };
+      }
+
+      if (request.params.name === "get_doc") {
+        const { cfg, client } = getRuntime();
+        const input = parseGetDocInput(request.params.arguments ?? {});
+        const options = toGetDocOptions(input);
+
+        const parsed = parseRef(input.ref, new URL(cfg.baseUrl).host);
+        const doc =
+          parsed.kind === "doc"
+            ? await client.getDoc(parsed.docId, options)
+            : parsed.kind === "page"
+              ? await client.getPageDoc(parsed.teamId, parsed.pageId, options)
+              : await client.getDocByRequirementId(parsed.requirementId, options);
+
+        return {
+          content: [{ type: "text", text: JSON.stringify(doc, null, 2) }],
+        };
+      }
+
+      throw new Error(`Unknown tool: ${request.params.name}`);
+    } catch (error) {
+      logError("mcp.tool.failed", {
+        toolName: request.params.name,
+        ...serializeError(error),
+      });
+      throw error;
     }
-
-    if (request.params.name === "get_doc") {
-      const input = parseGetDocInput(request.params.arguments ?? {});
-      const options = toGetDocOptions(input);
-
-      const parsed = parseRef(input.ref, new URL(cfg.baseUrl).host);
-      const doc =
-        parsed.kind === "doc"
-          ? await client.getDoc(parsed.docId, options)
-          : parsed.kind === "page"
-            ? await client.getPageDoc(parsed.teamId, parsed.pageId, options)
-            : await client.getDocByRequirementId(parsed.requirementId, options);
-
-      return {
-        content: [{ type: "text", text: JSON.stringify(doc, null, 2) }],
-      };
-    }
-
-    throw new Error(`Unknown tool: ${request.params.name}`);
   });
 
   return server;
 }
 
 export async function startStdioServer(): Promise<void> {
+  logInfo("mcp.startup.begin", getRuntimeEnvMeta());
   const server = createServer();
   const transport = new StdioServerTransport();
   await server.connect(transport);
+  logInfo("mcp.startup.ready", getRuntimeEnvMeta());
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (isCliEntrypoint(import.meta.url)) {
+  process.on("uncaughtException", (error) => {
+    logError("mcp.process.uncaughtException", {
+      ...getRuntimeEnvMeta(),
+      ...serializeError(error),
+    });
+    process.exit(1);
+  });
+
+  process.on("unhandledRejection", (reason) => {
+    logError("mcp.process.unhandledRejection", {
+      ...getRuntimeEnvMeta(),
+      ...serializeError(reason),
+    });
+    process.exit(1);
+  });
+
   startStdioServer().catch((err) => {
-    console.error(
-      "[ones-doc-mcp] startup failed before initialize; check ONES_BASE_URL/ONES_USERNAME/ONES_PASSWORD",
-    );
-    console.error(err);
+    logError("mcp.startup.failed", {
+      ...getRuntimeEnvMeta(),
+      ...serializeError(err),
+    });
     process.exit(1);
   });
 }
