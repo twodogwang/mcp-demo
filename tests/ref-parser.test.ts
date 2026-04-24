@@ -12,8 +12,8 @@ describe("parseRef", () => {
 
   it("parses wiki page url as page ref", () => {
     const out = parseRef(
-      "https://1s.oristand.com/wiki/#/team/63FL1oSZ/space/JhN6fj4M/page/9Pkrzqbf",
-      "1s.oristand.com",
+      "https://ones.example.internal/wiki/#/team/63FL1oSZ/space/JhN6fj4M/page/9Pkrzqbf",
+      "ones.example.internal",
     );
     expect(out).toEqual({
       kind: "page",

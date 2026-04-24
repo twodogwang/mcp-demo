@@ -43,7 +43,7 @@ describe("EndpointDiscovery", () => {
 
     vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
 
-    const discovery = new EndpointDiscovery("https://1s.oristand.com", 5000);
+    const discovery = new EndpointDiscovery("https://ones.example.internal", 5000);
     const login = await discovery.resolveLoginPath({
       username: "u",
       password: "p",

@@ -128,8 +128,8 @@ describe("mcp e2e flow with mocked ones", () => {
 
   it("parses wiki page url and returns page content", async () => {
     const parsed = parseRef(
-      "https://1s.oristand.com/wiki/#/team/63FL1oSZ/space/JhN6fj4M/page/9Pkrzqbf",
-      "1s.oristand.com",
+      "https://ones.example.internal/wiki/#/team/63FL1oSZ/space/JhN6fj4M/page/9Pkrzqbf",
+      "ones.example.internal",
     );
     expect(parsed.kind).toBe("page");
 
@@ -191,7 +191,7 @@ describe("mcp e2e flow with mocked ones", () => {
 
     const client = new OnesClient(
       {
-        baseUrl: "https://1s.oristand.com",
+        baseUrl: "https://ones.example.internal",
         timeoutMs: 5000,
         maxContentChars: 20000,
       },
