@@ -10,6 +10,10 @@ const keys = [
   "ONES_DOC_PATH_TEMPLATE",
   "ONES_TIMEOUT_MS",
   "ONES_MAX_CONTENT_CHARS",
+  "ONES_OCR_PROVIDER",
+  "ONES_OCR_ENDPOINT",
+  "ONES_OCR_API_KEY",
+  "ONES_OCR_TIMEOUT_MS",
 ] as const;
 
 afterEach(() => {
@@ -32,5 +36,77 @@ describe("loadConfig", () => {
     expect("loginPath" in cfg).toBe(false);
     expect("searchPath" in cfg).toBe(false);
     expect("docPathTemplate" in cfg).toBe(false);
+  });
+
+  it("exposes ocr config with defaults and trims empty strings to null", () => {
+    process.env.ONES_BASE_URL = "https://ones.example.internal";
+    process.env.ONES_USERNAME = "u";
+    process.env.ONES_PASSWORD = "p";
+    process.env.ONES_OCR_PROVIDER = "";
+    process.env.ONES_OCR_ENDPOINT = " ";
+    process.env.ONES_OCR_API_KEY = "";
+
+    const cfg = loadConfig();
+
+    expect(cfg.ocr).toBeDefined();
+    expect(cfg.ocr).toEqual({
+      provider: null,
+      endpoint: null,
+      apiKey: null,
+      timeoutMs: 15000,
+    });
+  });
+
+  it("falls back to defaults when numeric envs are blank/whitespace", () => {
+    process.env.ONES_BASE_URL = "https://ones.example.internal";
+    process.env.ONES_USERNAME = "u";
+    process.env.ONES_PASSWORD = "p";
+    process.env.ONES_TIMEOUT_MS = "";
+    process.env.ONES_MAX_CONTENT_CHARS = "   ";
+    process.env.ONES_OCR_TIMEOUT_MS = "\t";
+
+    const cfg = loadConfig();
+
+    expect(cfg.timeoutMs).toBe(15000);
+    expect(cfg.maxContentChars).toBe(20000);
+    expect(cfg.ocr.timeoutMs).toBe(15000);
+  });
+
+  it("trims optional string env values before using them", () => {
+    process.env.ONES_BASE_URL = "https://ones.example.internal";
+    process.env.ONES_USERNAME = "u";
+    process.env.ONES_PASSWORD = "p";
+    process.env.ONES_OCR_PROVIDER = "  tencent  ";
+    process.env.ONES_OCR_ENDPOINT = " https://ocr.example.internal ";
+    process.env.ONES_OCR_API_KEY = "  secret-key  ";
+
+    const cfg = loadConfig();
+
+    expect(cfg.ocr.provider).toBe("tencent");
+    expect(cfg.ocr.endpoint).toBe("https://ocr.example.internal");
+    expect(cfg.ocr.apiKey).toBe("secret-key");
+  });
+
+  it("trims required env values before using them", () => {
+    process.env.ONES_BASE_URL = " https://ones.example.internal ";
+    process.env.ONES_USERNAME = " user ";
+    process.env.ONES_PASSWORD = " pass ";
+
+    const cfg = loadConfig();
+
+    expect(cfg.baseUrl).toBe("https://ones.example.internal");
+    expect(cfg.username).toBe("user");
+    expect(cfg.password).toBe("pass");
+  });
+
+  it("throws clear error when numeric env is not a finite number", () => {
+    process.env.ONES_BASE_URL = "https://ones.example.internal";
+    process.env.ONES_USERNAME = "u";
+    process.env.ONES_PASSWORD = "p";
+    process.env.ONES_TIMEOUT_MS = "not-a-number";
+
+    expect(() => loadConfig()).toThrowError(
+      "Invalid numeric env: ONES_TIMEOUT_MS, got: not-a-number",
+    );
   });
 });

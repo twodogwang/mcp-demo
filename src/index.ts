@@ -15,6 +15,7 @@ import { z } from "zod";
 import { SessionManager } from "./auth/session-manager.js";
 import { loadConfig } from "./config.js";
 import { EndpointDiscovery } from "./discovery/endpoint-discovery.js";
+import { toGetDocOptions } from "./documents/model.js";
 import { getRuntimeEnvMeta, logError, logInfo, serializeError } from "./logger.js";
 import { OnesClient } from "./ones-client.js";
 import { parseRef } from "./ref-parser.js";
@@ -23,6 +24,13 @@ type Runtime = {
   cfg: ReturnType<typeof loadConfig>;
   client: OnesClient;
 };
+
+const getDocInputSchema = z.object({
+  ref: z.string().min(1),
+  view: z.enum(["llm", "human", "both"]).default("llm"),
+  include_raw: z.boolean().default(false),
+  include_resources: z.boolean().default(true),
+});
 
 function defaultResolvePath(input: string): string {
   return realpathSync(input);
@@ -44,6 +52,10 @@ export function isCliEntrypoint(
   }
 }
 
+export function parseGetDocInput(input: unknown) {
+  return getDocInputSchema.parse(input);
+}
+
 export function buildToolList(): Tool[] {
   return [
     {
@@ -60,11 +72,19 @@ export function buildToolList(): Tool[] {
     },
     {
       name: "get_doc",
-      description: "Get ONES doc by context ref (URL or #requirement)",
+      description:
+        "Get ONES doc by context ref (URL or #requirement) and return llm/human structured views.",
       inputSchema: {
         type: "object",
         properties: {
-          ref: { type: "string" },
+          ref: { type: "string", minLength: 1 },
+          view: {
+            type: "string",
+            enum: ["llm", "human", "both"],
+            default: "llm",
+          },
+          include_raw: { type: "boolean", default: false },
+          include_resources: { type: "boolean", default: true },
         },
         required: ["ref"],
       },
@@ -96,6 +116,7 @@ export function createServer() {
           baseUrl: cfg.baseUrl,
           timeoutMs: cfg.timeoutMs,
           maxContentChars: cfg.maxContentChars,
+          ocr: cfg.ocr,
         },
         sessions,
         discovery,
@@ -147,19 +168,16 @@ export function createServer() {
 
       if (request.params.name === "get_doc") {
         const { cfg, client } = getRuntime();
-        const input = z
-          .object({
-            ref: z.string().min(1),
-          })
-          .parse(request.params.arguments ?? {});
+        const input = parseGetDocInput(request.params.arguments ?? {});
+        const options = toGetDocOptions(input);
 
         const parsed = parseRef(input.ref, new URL(cfg.baseUrl).host);
         const doc =
           parsed.kind === "doc"
-            ? await client.getDoc(parsed.docId)
+            ? await client.getDoc(parsed.docId, options)
             : parsed.kind === "page"
-              ? await client.getPageDoc(parsed.teamId, parsed.pageId)
-              : await client.getDocByRequirementId(parsed.requirementId);
+              ? await client.getPageDoc(parsed.teamId, parsed.pageId, options)
+              : await client.getDocByRequirementId(parsed.requirementId, options);
 
         return {
           content: [{ type: "text", text: JSON.stringify(doc, null, 2) }],

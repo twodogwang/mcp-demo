@@ -1,0 +1,44 @@
+{
+  "case": "table-page-1",
+  "ref": "table-page",
+  "title": "示例页面",
+  "source_format": "html",
+  "reviewer": "your_name",
+  "questions": [
+    {
+      "question": "第一个表格中的关键规则是什么？",
+      "expected_focus": "表格结构",
+      "answerable": true,
+      "easy_to_locate": false,
+      "needs_raw": true,
+      "needs_ones_page": false,
+      "answer": "支持增量同步，失败后重试 3 次。",
+      "evidence": ["root/1", "root/1/r1/c1"],
+      "issues": [
+        "表格 path 可以定位到表格节点，但单元格层面的人工定位不够直观"
+      ]
+    },
+    {
+      "question": "图片 OCR 是否补充了正文中没有的信息？",
+      "expected_focus": "图片与 OCR",
+      "answerable": true,
+      "easy_to_locate": true,
+      "needs_raw": false,
+      "needs_ones_page": false,
+      "answer": "是，图片 OCR 补充了重试次数说明。",
+      "evidence": ["res-image-0"],
+      "issues": []
+    }
+  ],
+  "summary": {
+    "overall_usable_for_llm": false,
+    "main_risks": [
+      "复杂表格定位成本偏高",
+      "部分问题仍需回看 raw 才能确认"
+    ],
+    "recommended_actions": [
+      "增强表格单元格定位能力",
+      "减少必须回退 raw 的场景"
+    ]
+  }
+}

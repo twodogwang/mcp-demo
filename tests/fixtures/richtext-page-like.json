@@ -1,0 +1,56 @@
+{
+  "blocks": [
+    {
+      "id": "title-block",
+      "type": "text",
+      "heading": 1,
+      "text": [{ "insert": "Buyer提现线上化" }]
+    },
+    {
+      "id": "table-block",
+      "type": "table",
+      "rows": 2,
+      "cols": 2,
+      "children": ["cell-a", "cell-b", "cell-c"],
+      "cell-a_rowSpan": 2,
+      "cell-a_colSpan": 1
+    },
+    {
+      "id": "flowchart",
+      "type": "embed",
+      "embedType": "drawio",
+      "embedData": {
+        "src": "https://img.example/flow.svg",
+        "height": 400
+      }
+    },
+    {
+      "id": "note",
+      "type": "list",
+      "ordered": false,
+      "level": 1,
+      "text": [{ "insert": "页面设计和交互以设计稿为准" }]
+    }
+  ],
+  "cell-a": [
+    {
+      "id": "cell-a-text",
+      "type": "text",
+      "text": [{ "insert": "更新记录" }]
+    }
+  ],
+  "cell-b": [
+    {
+      "id": "cell-b-text",
+      "type": "text",
+      "text": [{ "insert": "2026-04-23" }]
+    }
+  ],
+  "cell-c": [
+    {
+      "id": "cell-c-text",
+      "type": "text",
+      "text": [{ "insert": "Buyer转账和提现线上化" }]
+    }
+  ]
+}

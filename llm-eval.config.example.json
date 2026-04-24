@@ -1,0 +1,26 @@
+{
+  "model": "gpt-5.2",
+  "variant": "llm_view",
+  "maxOutputTokens": 800,
+  "developerPrompt": "你会收到一份 ONES 文档的结构化返回值和一个问题。只依据输入内容回答，不要补充输入中不存在的信息。优先使用表格结构、图片资源和 OCR 信息。",
+  "refs": {
+    "table-page": "https://ones.example.internal/wiki/#/team/TEAM_ID/space/SPACE_ID/page/PAGE_ID",
+    "req-12345": "#12345"
+  },
+  "cases": [
+    {
+      "name": "table-page-summary",
+      "ref": "table-page",
+      "question": "请总结这份文档的核心需求，并明确指出是否涉及表格中的规则信息。",
+      "requiredPhrases": ["表格"],
+      "forbiddenPhrases": ["无法判断"]
+    },
+    {
+      "name": "requirement-rules",
+      "ref": "req-12345",
+      "question": "请列出这份需求文档中的关键规则。如果某条规则来自图片 OCR，请显式说明。",
+      "requiredPhrases": [],
+      "forbiddenPhrases": []
+    }
+  ]
+}

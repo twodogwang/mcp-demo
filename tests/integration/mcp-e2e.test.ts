@@ -50,6 +50,12 @@ describe("mcp e2e flow with mocked ones", () => {
         baseUrl: "https://ones.example.internal",
         timeoutMs: 5000,
         maxContentChars: 20000,
+        ocr: {
+          provider: null,
+          endpoint: null,
+          apiKey: null,
+          timeoutMs: 1000,
+        },
       },
       sessions as any,
       discovery as any,
@@ -60,7 +66,24 @@ describe("mcp e2e flow with mocked ones", () => {
     expect(docs[0]?.id).toBe("D-1");
 
     const doc = await client.getDoc("D-1");
-    expect(doc.content).toBe("Hello ONES");
+    expect(doc).toMatchObject({
+      doc: {
+        id: "D-1",
+        title: "Doc 1",
+        source_format: "html",
+      },
+      llm_view: {
+        type: "document",
+        source_format: "html",
+        children: [
+          {
+            type: "paragraph",
+            children: [{ type: "text", value: "Hello ONES" }],
+          },
+        ],
+      },
+    });
+    expect(doc.human_view).toBeUndefined();
   });
 
   it("get_doc with #12345 returns latest linked doc content", async () => {
@@ -116,14 +139,34 @@ describe("mcp e2e flow with mocked ones", () => {
         baseUrl: "https://ones.example.internal",
         timeoutMs: 5000,
         maxContentChars: 20000,
+        ocr: {
+          provider: null,
+          endpoint: null,
+          apiKey: null,
+          timeoutMs: 1000,
+        },
       },
       sessions as any,
       discovery as any,
     );
 
     const doc = await client.getDocByRequirementId("12345");
-    expect(doc.id).toBe("D-2");
-    expect(doc.content).toBe("Latest Content");
+    expect(doc).toMatchObject({
+      doc: {
+        id: "D-2",
+        title: "Latest Doc",
+        source_format: "html",
+      },
+      llm_view: {
+        type: "document",
+        children: [
+          {
+            type: "paragraph",
+            children: [{ type: "text", value: "Latest Content" }],
+          },
+        ],
+      },
+    });
   });
 
   it("parses wiki page url and returns page content", async () => {
@@ -194,6 +237,12 @@ describe("mcp e2e flow with mocked ones", () => {
         baseUrl: "https://ones.example.internal",
         timeoutMs: 5000,
         maxContentChars: 20000,
+        ocr: {
+          provider: null,
+          endpoint: null,
+          apiKey: null,
+          timeoutMs: 1000,
+        },
       },
       sessions as any,
       discovery as any,
@@ -203,9 +252,141 @@ describe("mcp e2e flow with mocked ones", () => {
       throw new Error("expected page ref");
     }
 
-    const doc = await client.getPageDoc(parsed.teamId, parsed.pageId);
-    expect(doc.title).toBe("#47520 后台管理系统数据权限重构");
-    expect(doc.content).toContain("需求目的/背景");
-    expect(doc.content).toContain("权限管理核心作用");
+    const doc = await client.getPageDoc(parsed.teamId, parsed.pageId, {
+      view: "both",
+      includeRaw: true,
+      includeResources: false,
+    });
+    expect(doc).toMatchObject({
+      doc: {
+        title: "#47520 后台管理系统数据权限重构",
+        source_format: "richtext-json",
+      },
+      llm_view: {
+        type: "document",
+        source_format: "richtext-json",
+        children: [
+          {
+            type: "paragraph",
+            children: [{ type: "text", value: "#47520 后台管理系统数据权限重构" }],
+          },
+          {
+            type: "paragraph",
+            children: [{ type: "text", value: "需求目的/背景" }],
+          },
+          {
+            type: "paragraph",
+            children: [{ type: "text", value: "权限管理核心作用" }],
+          },
+        ],
+      },
+      human_view: {
+        format: "markdown",
+      },
+      raw: {
+        content: expect.stringContaining("\"blocks\""),
+      },
+    });
+    expect(doc.human_view?.content).toContain("需求目的/背景");
+    expect(doc.human_view?.content).toContain("权限管理核心作用");
+    expect(doc.llm_view?.resources).toBeUndefined();
+  });
+
+  it("renders wiki page human_view with absolute editor resource urls", async () => {
+    const parsed = parseRef(
+      "https://ones.example.internal/wiki/#/team/63FL1oSZ/space/JhN6fj4M/page/KkVZSkGh",
+      "ones.example.internal",
+    );
+    expect(parsed.kind).toBe("page");
+
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            title: "Wiki Page",
+            team_uuid: "63FL1oSZ",
+            ref_uuid: "CyyFbXuD",
+          }),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            content: JSON.stringify({
+              blocks: [
+                {
+                  type: "text",
+                  heading: 1,
+                  text: [{ insert: "标题" }],
+                },
+                {
+                  type: "embed",
+                  embedType: "image",
+                  embedData: {
+                    src: "GtOawA3kTPPgoj6A6ZEFIXyTcK4XvrWNnIrlMl_878A.png",
+                  },
+                },
+              ],
+            }),
+          }),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          },
+        ),
+      );
+
+    vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
+
+    const client = new OnesClient(
+      {
+        baseUrl: "https://ones.example.internal",
+        timeoutMs: 5000,
+        maxContentChars: 20000,
+        ocr: {
+          provider: null,
+          endpoint: null,
+          apiKey: null,
+          timeoutMs: 1000,
+        },
+      },
+      {
+        getValidAuthHeaders: vi.fn().mockResolvedValue({ Authorization: "Bearer ok" }),
+        invalidate: vi.fn(),
+      } as any,
+      {
+        resolveSearchPath: vi.fn(),
+        resolveDocTemplate: vi.fn(),
+        resolveRequirementTemplate: vi.fn(),
+      } as any,
+    );
+
+    if (parsed.kind !== "page") {
+      throw new Error("expected page ref");
+    }
+
+    const doc = await client.getPageDoc(parsed.teamId, parsed.pageId, {
+      view: "both",
+      includeRaw: false,
+      includeResources: true,
+    });
+
+    expect(doc.llm_view?.resources).toEqual([
+      {
+        id: "res-image-0",
+        type: "embed",
+        embedType: "image",
+        src: "https://ones.example.internal/wiki/api/wiki/editor/63FL1oSZ/CyyFbXuD/resources/GtOawA3kTPPgoj6A6ZEFIXyTcK4XvrWNnIrlMl_878A.png",
+        alt: "image",
+      },
+    ]);
+    expect(doc.human_view?.content).toContain(
+      "![image](https://ones.example.internal/wiki/api/wiki/editor/63FL1oSZ/CyyFbXuD/resources/GtOawA3kTPPgoj6A6ZEFIXyTcK4XvrWNnIrlMl_878A.png)",
+    );
   });
 });
