@@ -10,7 +10,7 @@ export function buildDocumentChunks(
   }
 
   const chunks: DocumentChunkDetail[] = [];
-  let currentSections = [];
+  let currentSections: DocumentOutline["sections"] = [];
   let currentChars = 0;
 
   for (const section of outline.sections) {
