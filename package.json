@@ -1,6 +1,6 @@
 {
   "name": "@bakarhythm/get-doc-content",
-  "version": "1.1.1",
+  "version": "1.2.0",
   "description": "MCP server for fetching ONES linked document content from URL or requirement hash",
   "main": "dist/src/index.js",
   "bin": {
