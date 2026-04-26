@@ -24,9 +24,9 @@
     "build": "npm run clean && tsc -p tsconfig.json",
     "prepack": "npm run build",
     "start": "node dist/src/index.js",
-    "release:patch": "bumpp --all --commit --tag --no-push --no-verify --yes --release patch",
-    "release:minor": "bumpp --all --commit --tag --no-push --no-verify --yes --release minor",
-    "release:major": "bumpp --all --commit --tag --no-push --no-verify --yes --release major"
+    "changeset": "changeset",
+    "version-packages": "changeset version",
+    "release": "changeset publish"
   },
   "keywords": [],
   "author": "",
@@ -53,8 +53,8 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
+    "@changesets/cli": "^2.31.0",
     "@types/node": "^25.3.5",
-    "bumpp": "^10.4.1",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3",
     "vitest": "^4.0.18"
