@@ -30,7 +30,9 @@
 
 ## 单独包用法
 
-这个包本质上是一个基于 stdio 的 MCP Server。单独运行时会等待 MCP 客户端连接，不会像普通 CLI 那样输出交互式菜单。
+这个包本质上是一个基于 `stdio` 的 MCP Server。单独运行时会等待 MCP 客户端连接，不会像普通 CLI 那样输出交互式菜单。
+
+仓库内部已经按 transport 分层，默认入口仍只启用 `stdio`；未来如果需要接入 `Streamable HTTP`，可以在不改工具实现的前提下扩展新的 transport。
 
 ### 直接通过 npm 包运行
 
@@ -103,7 +105,16 @@ ONES_PASSWORD = "your_password_here"
 }
 ```
 
-启动成功后，MCP 客户端应能看到 `search_docs` 和 `get_doc` 两个工具。
+启动成功后，MCP 客户端应能看到以下工具：
+
+- `search_docs`
+- `get_doc`
+- `get_doc_outline`
+- `get_doc_section`
+- `get_doc_chunks`
+- `get_doc_context`
+
+这些工具都会继续返回可读的 JSON 文本内容，同时也会提供 MCP `structuredContent` 供支持结构化结果的客户端直接消费。
 
 ## 调试与评估
 
@@ -217,6 +228,17 @@ OPENAI_BASE_URL=
 
 ## MCP 工具
 
+### 推荐工作流
+
+对于中长文档，推荐按下面的顺序调用，而不是默认直接取整篇：
+
+1. `get_doc_outline`
+2. `get_doc_section` 或 `get_doc_chunks`
+3. 调用方在本地保留副本
+4. 再把需要的片段提供给 LLM
+
+如果调用方不想自己编排，也可以直接用 `get_doc_context`，让 server 按问题内容自动选择章节或分块。
+
 ### 1) `search_docs`
 
 按关键词搜索文档。
@@ -256,6 +278,46 @@ OPENAI_BASE_URL=
 
 ```json
 {"ref":"#12345"}
+```
+
+### 3) `get_doc_outline`
+
+先获取文档目录结构、章节路径和粗略长度，适合在长文场景下做渐进式读取。
+
+示例参数：
+
+```json
+{"ref":"#12345"}
+```
+
+### 4) `get_doc_section`
+
+按 `section_id` 获取单个章节；可选 `include_descendants=true` 把子章节一起带回。
+
+示例参数：
+
+```json
+{"ref":"#12345","section_id":"sec-2","include_descendants":true}
+```
+
+### 5) `get_doc_chunks`
+
+按字符预算分页获取文档片段，适合“总结整篇”或“检查全文冲突”这类任务。
+
+示例参数：
+
+```json
+{"ref":"#12345","cursor":null,"max_chars":6000}
+```
+
+### 6) `get_doc_context`
+
+根据问题自动选择章节或 chunk，适合不想自行编排 outline/section/chunk 工作流的调用方。
+
+示例参数：
+
+```json
+{"ref":"#12345","question":"请总结整篇文档的所有权限规则","mode":"auto","max_chars":12000}
 ```
 
 ```json

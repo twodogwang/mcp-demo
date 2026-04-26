@@ -115,3 +115,79 @@ export type DocDetail = {
   human_view?: HumanDocumentView;
   raw?: RawDocumentView;
 };
+
+export type DocumentSectionOutline = {
+  id: string;
+  path: string;
+  title: string;
+  level: number;
+  estimated_chars: number;
+  table_count: number;
+  image_count: number;
+  start_index: number;
+  end_index: number;
+};
+
+export type DocumentOutline = {
+  doc: DocMetadata;
+  estimated_chars: number;
+  section_count: number;
+  sections: DocumentSectionOutline[];
+};
+
+export type DocumentSectionDetail = {
+  doc: DocMetadata;
+  section: DocumentSectionOutline;
+  content: LlmDocumentView;
+  truncated: boolean;
+};
+
+export type GetDocSectionOptions = {
+  includeDescendants: boolean;
+  includeResources: boolean;
+};
+
+export type DocumentChunkDetail = {
+  cursor: string;
+  index: number;
+  section_ids: string[];
+  estimated_chars: number;
+  start_index: number;
+  end_index: number;
+};
+
+export type GetDocChunksOptions = {
+  cursor: string | null;
+  maxChars: number;
+  includeResources: boolean;
+};
+
+export type DocumentChunkResult = {
+  doc: DocMetadata;
+  chunk: DocumentChunkDetail;
+  content: LlmDocumentView;
+  has_more: boolean;
+  next_cursor: string | null;
+};
+
+export type DocumentContextStrategy =
+  | "outline_only"
+  | "targeted_sections"
+  | "full_chunks"
+  | "full_document";
+
+export type GetDocContextOptions = {
+  question: string;
+  maxChars: number;
+  includeResources: boolean;
+};
+
+export type DocumentContextResult = {
+  doc: DocMetadata;
+  strategy: DocumentContextStrategy;
+  reason: string;
+  selected_sections: string[];
+  consumed_chunks: number[];
+  truncated: boolean;
+  context: LlmDocumentView;
+};
