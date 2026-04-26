@@ -262,6 +262,39 @@ OPENAI_BASE_URL=
 {"ref":"#12345","view":"both","include_raw":true,"include_resources":true}
 ```
 
+## 发布流程
+
+仓库当前使用 Changesets 管理版本和发布说明，不再要求本地手工打 tag。
+
+推荐流程：
+
+1. 完成功能后，判断这次改动是否对调用方可感知
+2. 如果可感知，运行 `npm run changeset` 生成说明文件
+3. 把代码和 `.changeset/*.md` 一起合并到 `main`
+4. GitHub Actions 自动创建或更新 Release PR
+5. 合并 Release PR 后，Actions 自动发布 npm、创建 tag，并生成 GitHub Release
+
+### 什么时候必须写 changeset
+
+以下改动建议必须写：
+
+- 新增、删除或重命名 MCP 工具
+- 工具参数、返回结构、默认行为变化
+- 安装方式、运行入口、环境变量契约变化
+- 调用方能直接感知到的 bugfix
+
+以下改动通常可以不写：
+
+- 仅文档、测试、注释变更
+- 不影响调用方的内部重构
+- 仅 CI 或本地开发流程调整
+
+### 去哪里看这次发了什么
+
+- Release PR：看即将发布的版本号和变更摘要
+- GitHub Release：看已经发布出去的 changelog
+- GitHub Actions 日志：看发布执行过程、失败原因和 npm publish 记录
+
 ## 常见问题
 
 1. 登录失败，`AUTH_FAILED`
