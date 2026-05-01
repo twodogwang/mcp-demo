@@ -42,13 +42,14 @@ export class SessionManager {
   constructor(private readonly cfg: SessionConfig) {}
 
   async getValidAuthHeaders(): Promise<Record<string, string>> {
-    if (this.hasExternalSessionAuth()) {
+    const externalSession = this.cfg.externalSession;
+    if (externalSession?.authToken || externalSession?.cookie) {
       if (this.externalSessionExpired) {
         throw new AppError("AUTH_FAILED", "ONES external session expired", 403);
       }
 
       if (!this.authHeaders) {
-        this.authHeaders = this.buildExternalSessionHeaders(this.cfg.externalSession);
+        this.authHeaders = this.buildExternalSessionHeaders(externalSession);
       }
 
       return this.authHeaders;
@@ -74,7 +75,9 @@ export class SessionManager {
     this.authHeaders = null;
     this.inflight = null;
     this.cookies.clear();
-    this.externalSessionExpired = this.hasExternalSessionAuth();
+    this.externalSessionExpired = Boolean(
+      this.cfg.externalSession?.authToken || this.cfg.externalSession?.cookie,
+    );
   }
 
   private async login(): Promise<Record<string, string>> {
@@ -208,12 +211,6 @@ export class SessionManager {
       externalSession?.userAgent ?? DEFAULT_ONES_USER_AGENT;
 
     return headers;
-  }
-
-  private hasExternalSessionAuth(): boolean {
-    return Boolean(
-      this.cfg.externalSession?.authToken || this.cfg.externalSession?.cookie,
-    );
   }
 
   private async startAuthorizeFlow(
