@@ -94,6 +94,7 @@ export class SessionManager {
       "/identity/api/encryption_cert",
       {
         method: "POST",
+        headers: this.buildBrowserHeaders(),
       },
     );
 
@@ -104,7 +105,10 @@ export class SessionManager {
 
     const loginPayload = await this.requestJson<LoginPayload>("/identity/api/login", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        ...this.buildBrowserHeaders(),
+        "Content-Type": "application/json",
+      },
       body: JSON.stringify({
         email: this.cfg.username,
         password: encryptedPassword,
@@ -119,7 +123,10 @@ export class SessionManager {
       "/identity/api/auth_request/finalize",
       {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          ...this.buildBrowserHeaders(),
+          "Content-Type": "application/json",
+        },
         body: JSON.stringify({
           auth_request_id: authRequestId,
           region_uuid: orgUser.org?.region_uuid,
@@ -137,6 +144,7 @@ export class SessionManager {
     const token = await this.requestJson<TokenPayload>("/identity/oauth/token", {
       method: "POST",
       headers: {
+        ...this.buildBrowserHeaders(),
         "Content-Type": "application/x-www-form-urlencoded",
       },
       body: new URLSearchParams({
@@ -225,6 +233,7 @@ export class SessionManager {
     const response = await this.requestRaw("/identity/authorize", {
       method: "POST",
       headers: {
+        ...this.buildBrowserHeaders(),
         "Content-Type": "application/x-www-form-urlencoded",
       },
       body: new URLSearchParams({
@@ -254,6 +263,7 @@ export class SessionManager {
 
     const response = await this.requestRaw(this.toAbsoluteUrl(callbackUrl), {
       method: "GET",
+      headers: this.buildBrowserHeaders(),
       redirect: "manual",
     });
 
