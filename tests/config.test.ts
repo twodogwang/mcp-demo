@@ -5,6 +5,11 @@ const keys = [
   "ONES_BASE_URL",
   "ONES_USERNAME",
   "ONES_PASSWORD",
+  "ONES_AUTH_TOKEN",
+  "ONES_COOKIE",
+  "ONES_ORIGIN",
+  "ONES_REFERER",
+  "ONES_USER_AGENT",
   "ONES_LOGIN_PATH",
   "ONES_SEARCH_PATH",
   "ONES_DOC_PATH_TEMPLATE",
@@ -36,6 +41,45 @@ describe("loadConfig", () => {
     expect("loginPath" in cfg).toBe(false);
     expect("searchPath" in cfg).toBe(false);
     expect("docPathTemplate" in cfg).toBe(false);
+  });
+
+  it("accepts external session auth without username/password", () => {
+    process.env.ONES_BASE_URL = "https://ones.example.internal";
+    process.env.ONES_AUTH_TOKEN = " token-1 ";
+    process.env.ONES_COOKIE = " ones-lt=abc; ones-ids-sid=xyz ";
+    process.env.ONES_USER_AGENT = " Mozilla/5.0 ";
+
+    const cfg = loadConfig();
+
+    expect(cfg.baseUrl).toBe("https://ones.example.internal");
+    expect(cfg.username).toBeNull();
+    expect(cfg.password).toBeNull();
+    expect(cfg.externalSession).toEqual({
+      authToken: "token-1",
+      cookie: "ones-lt=abc; ones-ids-sid=xyz",
+      origin: null,
+      referer: null,
+      userAgent: "Mozilla/5.0",
+    });
+  });
+
+  it("loads browser header overrides for username/password mode", () => {
+    process.env.ONES_BASE_URL = "https://ones.example.internal";
+    process.env.ONES_USERNAME = "u";
+    process.env.ONES_PASSWORD = "p";
+    process.env.ONES_ORIGIN = " https://1s.oristand.com ";
+    process.env.ONES_REFERER = " https://1s.oristand.com/project/ ";
+    process.env.ONES_USER_AGENT = " Mozilla/5.0 wxwork/5.0.8 ";
+
+    const cfg = loadConfig();
+
+    expect(cfg.externalSession).toEqual({
+      authToken: null,
+      cookie: null,
+      origin: "https://1s.oristand.com",
+      referer: "https://1s.oristand.com/project/",
+      userAgent: "Mozilla/5.0 wxwork/5.0.8",
+    });
   });
 
   it("exposes ocr config with defaults and trims empty strings to null", () => {

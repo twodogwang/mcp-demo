@@ -23,7 +23,7 @@ function formatToolErrorMessage(error: unknown): string {
   if (error instanceof AppError) {
     switch (error.code) {
       case "AUTH_FAILED":
-        return "ONES authentication failed. Check ONES_USERNAME and ONES_PASSWORD.";
+        return "ONES authentication failed. Refresh ONES_AUTH_TOKEN/ONES_COOKIE, or check ONES_USERNAME and ONES_PASSWORD.";
       case "INVALID_DOC_REF":
         return "Invalid ref. Use a full ONES document URL or a #requirement id.";
       case "NO_LINKED_DOC":

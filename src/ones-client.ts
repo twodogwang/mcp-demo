@@ -614,9 +614,14 @@ export class OnesClient {
         signal: controller.signal,
       });
 
-      if (res.status === 401 && retryable) {
+      if ([401, 403, 405].includes(res.status)) {
         this.sessions.invalidate();
-        return this.requestJson<T>(path, init, false);
+
+        if (retryable) {
+          return this.requestJson<T>(path, init, false);
+        }
+
+        throw new AppError("AUTH_FAILED", "ONES authentication failed", res.status);
       }
 
       if (res.status === 404) {

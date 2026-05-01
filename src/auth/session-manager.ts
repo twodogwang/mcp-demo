@@ -1,12 +1,14 @@
 import { createHash, publicEncrypt, randomBytes, constants } from "node:crypto";
 
+import type { ExternalSessionConfig } from "../config.js";
 import { AppError } from "../errors.js";
 
 type SessionConfig = {
   baseUrl: string;
-  username: string;
-  password: string;
+  username: string | null;
+  password: string | null;
   discovery: unknown;
+  externalSession: ExternalSessionConfig | null;
 };
 
 type OrgUser = {
@@ -28,14 +30,30 @@ type TokenPayload = {
   access_token?: string;
 };
 
+const DEFAULT_ONES_USER_AGENT =
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36 wxwork/5.0.8 WeChat/2.0.4 wwmver/3.26.508.613";
+
 export class SessionManager {
   private authHeaders: Record<string, string> | null = null;
   private inflight: Promise<Record<string, string>> | null = null;
   private cookies = new Map<string, string>();
+  private externalSessionExpired = false;
 
   constructor(private readonly cfg: SessionConfig) {}
 
   async getValidAuthHeaders(): Promise<Record<string, string>> {
+    if (this.hasExternalSessionAuth()) {
+      if (this.externalSessionExpired) {
+        throw new AppError("AUTH_FAILED", "ONES external session expired", 403);
+      }
+
+      if (!this.authHeaders) {
+        this.authHeaders = this.buildExternalSessionHeaders(this.cfg.externalSession);
+      }
+
+      return this.authHeaders;
+    }
+
     if (this.authHeaders) {
       return this.authHeaders;
     }
@@ -56,9 +74,17 @@ export class SessionManager {
     this.authHeaders = null;
     this.inflight = null;
     this.cookies.clear();
+    this.externalSessionExpired = this.hasExternalSessionAuth();
   }
 
   private async login(): Promise<Record<string, string>> {
+    if (!this.cfg.username || !this.cfg.password) {
+      throw new AppError(
+        "AUTH_FAILED",
+        "ONES username/password missing for identity login",
+      );
+    }
+
     const { codeVerifier, codeChallenge } = this.createPkcePair();
 
     const cert = await this.requestJson<{ public_key?: string }>(
@@ -124,7 +150,7 @@ export class SessionManager {
       throw new AppError("AUTH_FAILED", "ONES oauth token missing");
     }
 
-    const authHeaders = { Authorization: `Bearer ${accessToken}` };
+    const authHeaders = this.buildAuthenticatedHeaders(accessToken);
     await this.requestJson(
       "/project/api/project/auth/token_info",
       {
@@ -134,7 +160,60 @@ export class SessionManager {
       false,
     );
 
-    return authHeaders;
+    return this.buildAuthenticatedHeaders(accessToken);
+  }
+
+  private buildExternalSessionHeaders(
+    externalSession: ExternalSessionConfig,
+  ): Record<string, string> {
+    const headers = this.buildBrowserHeaders();
+
+    if (externalSession.authToken) {
+      headers.Authorization = this.formatAuthorizationHeader(
+        externalSession.authToken,
+      );
+    }
+
+    if (externalSession.cookie) {
+      headers.Cookie = externalSession.cookie;
+    }
+
+    return headers;
+  }
+
+  private formatAuthorizationHeader(token: string): string {
+    return /^Bearer\s+/i.test(token) ? token : `Bearer ${token}`;
+  }
+
+  private buildAuthenticatedHeaders(accessToken: string): Record<string, string> {
+    const headers = this.buildBrowserHeaders();
+    headers.Authorization = `Bearer ${accessToken}`;
+
+    const cookie = this.serializeCookies();
+    if (cookie) {
+      headers.Cookie = cookie;
+    }
+
+    return headers;
+  }
+
+  private buildBrowserHeaders(): Record<string, string> {
+    const headers: Record<string, string> = {};
+    const baseUrl = this.cfg.baseUrl.replace(/\/$/, "");
+    const externalSession = this.cfg.externalSession;
+
+    headers.Origin = externalSession?.origin ?? baseUrl;
+    headers.Referer = externalSession?.referer ?? `${baseUrl}/project/`;
+    headers["User-Agent"] =
+      externalSession?.userAgent ?? DEFAULT_ONES_USER_AGENT;
+
+    return headers;
+  }
+
+  private hasExternalSessionAuth(): boolean {
+    return Boolean(
+      this.cfg.externalSession?.authToken || this.cfg.externalSession?.cookie,
+    );
   }
 
   private async startAuthorizeFlow(

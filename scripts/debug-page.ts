@@ -135,6 +135,7 @@ export async function runDebugPage(argv: string[]): Promise<string> {
     username: cfg.username,
     password: cfg.password,
     discovery,
+    externalSession: cfg.externalSession,
   });
 
   const client = new OnesClient(

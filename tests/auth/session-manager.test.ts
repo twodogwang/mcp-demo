@@ -6,7 +6,37 @@ describe("SessionManager", () => {
     vi.restoreAllMocks();
   });
 
-  it("performs identity login flow and returns bearer auth header", async () => {
+  it("reuses injected external session headers without login requests", async () => {
+    const fetchMock = vi.fn<typeof fetch>();
+    vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
+
+    const sm = new SessionManager({
+      baseUrl: "https://ones.example.internal",
+      username: null,
+      password: null,
+      discovery: {} as any,
+      externalSession: {
+        authToken: "token-1",
+        cookie: "ones-lt=abc; ones-ids-sid=xyz",
+        origin: null,
+        referer: null,
+        userAgent: "Mozilla/5.0 TestBrowser",
+      },
+    });
+
+    const auth = await sm.getValidAuthHeaders();
+
+    expect(auth).toEqual({
+      Authorization: "Bearer token-1",
+      Cookie: "ones-lt=abc; ones-ids-sid=xyz",
+      Origin: "https://ones.example.internal",
+      Referer: "https://ones.example.internal/project/",
+      "User-Agent": "Mozilla/5.0 TestBrowser",
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("performs identity login flow and returns browser-like auth headers", async () => {
     const fetchMock = vi
       .fn<typeof fetch>()
       .mockResolvedValueOnce(
@@ -99,11 +129,18 @@ describe("SessionManager", () => {
       username: "u@example.com",
       password: "p@ss",
       discovery: {} as any,
+      externalSession: null,
     });
 
     const auth = await sm.getValidAuthHeaders();
 
-    expect(auth).toEqual({ Authorization: "Bearer token-1" });
+    expect(auth).toMatchObject({
+      Authorization: "Bearer token-1",
+      Cookie: "ids-session=abc",
+      Origin: "https://ones.example.internal",
+      Referer: "https://ones.example.internal/project/",
+      "User-Agent": expect.stringContaining("wxwork/5.0.8"),
+    });
     expect(fetchMock).toHaveBeenNthCalledWith(
       1,
       "https://ones.example.internal/identity/api/encryption_cert",

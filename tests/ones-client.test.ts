@@ -1,4 +1,5 @@
 import { expect, it, vi } from "vitest";
+import { AppError } from "../src/errors";
 import { OnesClient } from "../src/ones-client";
 
 it("re-login once on 401 then succeeds", async () => {
@@ -43,6 +44,56 @@ it("re-login once on 401 then succeeds", async () => {
 
   const result = await client.searchDocs("k", 5);
   expect(result).toEqual([]);
+  expect(invalidate).toHaveBeenCalledTimes(1);
+  expect(getValidAuthHeaders).toHaveBeenCalledTimes(3);
+});
+
+it("invalidates once on 403 and surfaces auth failure", async () => {
+  const getValidAuthHeaders = vi
+    .fn<() => Promise<Record<string, string>>>()
+    .mockResolvedValueOnce({
+      Authorization: "Bearer stale",
+      Cookie: "ones-lt=abc",
+    })
+    .mockResolvedValueOnce({
+      Authorization: "Bearer stale",
+      Cookie: "ones-lt=abc",
+    })
+    .mockRejectedValueOnce(
+      new AppError("AUTH_FAILED", "ONES external session expired", 403),
+    );
+  const invalidate = vi.fn();
+
+  const fetchMock = vi
+    .fn<typeof fetch>()
+    .mockResolvedValueOnce(new Response("forbidden", { status: 403 }));
+
+  vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
+
+  const client = new OnesClient(
+    {
+      baseUrl: "https://ones.example.internal",
+      timeoutMs: 5000,
+      maxContentChars: 20000,
+      ocr: {
+        provider: null,
+        endpoint: null,
+        apiKey: null,
+        timeoutMs: 1000,
+      },
+    },
+    { getValidAuthHeaders, invalidate },
+    {
+      resolveSearchPath: vi.fn().mockResolvedValue("/api/wiki/search"),
+      resolveDocTemplate: vi.fn(),
+      resolveRequirementTemplate: vi.fn(),
+    } as any,
+  );
+
+  await expect(client.searchDocs("k", 5)).rejects.toMatchObject({
+    code: "AUTH_FAILED",
+    message: "ONES external session expired",
+  });
   expect(invalidate).toHaveBeenCalledTimes(1);
   expect(getValidAuthHeaders).toHaveBeenCalledTimes(3);
 });

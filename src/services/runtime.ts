@@ -25,6 +25,7 @@ async function createDefaultRuntime(): Promise<Runtime> {
       username: cfg.username,
       password: cfg.password,
       discovery,
+      externalSession: cfg.externalSession,
     });
 
     const client = new OnesClient(

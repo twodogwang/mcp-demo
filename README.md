@@ -1,20 +1,28 @@
 # ONES Doc MCP
 
-用于内网环境的 ONES 文档读取 MCP Server。只需配置 ONES 地址和登录账号密码，即可通过 MCP 获取文档搜索结果与文档正文。
+用于内网环境的 ONES 文档读取 MCP Server。支持两种鉴权方式：
+
+- 账号密码登录
+- 浏览器已登录态复用
 
 ## 环境要求
 
 - Node.js 20.19.0+
 - 可访问 ONES 内网地址
-- ONES 账号，建议最小只读权限
+- ONES 账号或已登录浏览器会话
 
 ## 环境变量
 
-复制 `.env.example` 为 `.env` 并填写：
+复制 `.env.example` 为 `.env` 并填写。以下两组选一种即可：
 
 - `ONES_BASE_URL`：ONES 内网根地址
-- `ONES_USERNAME`：登录账号
-- `ONES_PASSWORD`：登录密码
+- `ONES_USERNAME`：登录账号，账号密码模式必填
+- `ONES_PASSWORD`：登录密码，账号密码模式必填
+- `ONES_AUTH_TOKEN`：浏览器会话里的 Bearer token，会话复用模式可选但建议提供
+- `ONES_COOKIE`：浏览器会话里的 Cookie，会话复用模式可选但建议提供
+- `ONES_ORIGIN`：请求使用的 Origin，可选，默认回落到 `ONES_BASE_URL`
+- `ONES_REFERER`：请求使用的 Referer，可选，默认回落到 `${ONES_BASE_URL}/project/`
+- `ONES_USER_AGENT`：请求使用的 User-Agent，可选；账号密码模式下未配置时默认使用企微风格 UA
 - `ONES_TIMEOUT_MS`：请求超时，可选，默认 `15000`
 - `ONES_MAX_CONTENT_CHARS`：正文最大长度，可选，默认 `20000`
 - `ONES_OCR_PROVIDER`：OCR 提供方，可选，当前支持 `http`
@@ -27,6 +35,13 @@
 - `ONES_BASE_URL=https://ones.example.internal`
 - `ONES_USERNAME=your_username@example.com`
 - `ONES_PASSWORD=your_password_here`
+
+或者：
+
+- `ONES_BASE_URL=https://ones.example.internal`
+- `ONES_AUTH_TOKEN=your_browser_bearer_token`
+- `ONES_COOKIE=ones-lt=...; ones-ids-sid=...`
+- `ONES_USER_AGENT=Mozilla/5.0 ...`
 
 ## 单独包用法
 
@@ -71,6 +86,16 @@ args = ["-y", "@bakarhythm/get-doc-content@latest"]
 ONES_BASE_URL = "https://ones.example.internal"
 ONES_USERNAME = "your_username@example.com"
 ONES_PASSWORD = "your_password_here"
+```
+
+如果你的 ONES 租户依赖浏览器登录态，也可以直接注入会话：
+
+```toml
+[mcp_servers.getDocContent.env]
+ONES_BASE_URL = "https://ones.example.internal"
+ONES_AUTH_TOKEN = "your_browser_bearer_token"
+ONES_COOKIE = "ones-lt=...; ones-ids-sid=..."
+ONES_USER_AGENT = "Mozilla/5.0 ..."
 ```
 
 如果你想优先验证本地修复，而不是使用 npm 上的已发布版本，也可以直接指向本地构建产物：
@@ -361,6 +386,7 @@ OPENAI_BASE_URL=
 
 1. 登录失败，`AUTH_FAILED`
 - 检查 `ONES_BASE_URL`、账号密码是否正确。
+- 如果使用会话复用，刷新 `ONES_AUTH_TOKEN` 和 `ONES_COOKIE`。
 
 2. MCP 启动失败，提示 `initialize response` 或连接被关闭
 - 先确认客户端实际启动的是哪个版本。
