@@ -1,5 +1,15 @@
 # @bakarhythm/get-doc-content
 
+## 1.2.2
+
+### Patch Changes
+
+- ae09e20: Apply browser-style ONES headers during the password login flow.
+
+  - send `Origin`, `Referer`, and enterprise-WeChat-like `User-Agent` headers on identity login requests
+  - preserve the existing cookie-capture flow across authorize and token exchange requests
+  - unblock ONES tenants that gate account-password login behind browser-context routing
+
 ## 1.2.1
 
 ### Patch Changes
