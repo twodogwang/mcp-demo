@@ -14,6 +14,15 @@ import { isCliEntrypoint } from "../src/index";
 import { createMcpServer } from "../src/server/create-mcp-server";
 import { parseGetDocInput } from "../src/schemas/get-doc";
 import type { Runtime } from "../src/services/runtime";
+import type {
+  BugDetailResult,
+  BugParentRequirementResult,
+  ExecutionTasksResult,
+  RequirementBugsResult,
+  RequirementDetailResult,
+  ResolveTaskResult,
+  TaskMessagesResult,
+} from "../src/work-items/model";
 
 const keys = [
   "ONES_BASE_URL",
@@ -25,6 +34,7 @@ const baseConfig: AppConfig = {
   baseUrl: "https://ones.example.internal",
   username: "demo",
   password: "secret",
+  defaultTeamId: "team-1",
   timeoutMs: 5000,
   maxContentChars: 20000,
   ocr: {
@@ -48,6 +58,14 @@ function createRuntime(overrides?: {
   getDocSectionByParsedRef?: Runtime["client"]["getDocSectionByParsedRef"];
   getDocChunksByParsedRef?: Runtime["client"]["getDocChunksByParsedRef"];
   getDocContextByParsedRef?: Runtime["client"]["getDocContextByParsedRef"];
+  resolveRequirement?: Runtime["client"]["resolveRequirement"];
+  getRequirementDetail?: Runtime["client"]["getRequirementDetail"];
+  getExecutionTasks?: Runtime["client"]["getExecutionTasks"];
+  resolveBug?: Runtime["client"]["resolveBug"];
+  getBugDetail?: Runtime["client"]["getBugDetail"];
+  getBugParentRequirement?: Runtime["client"]["getBugParentRequirement"];
+  listRequirementBugs?: Runtime["client"]["listRequirementBugs"];
+  getTaskMessages?: Runtime["client"]["getTaskMessages"];
 }): Runtime {
   const fallbackDoc: DocDetail = {
     doc: {
@@ -109,6 +127,95 @@ function createRuntime(overrides?: {
     truncated: false,
     context: fallbackDoc.llm_view!,
   };
+  const fallbackRequirementEntity = {
+    entity_type: "requirement" as const,
+    task_id: "REQ-1",
+    number: 794,
+    summary: "需求 794",
+    task_type: { id: "15eiaFu6", name: "需求" },
+    status: { id: "status-1", name: "进行中" },
+    owner: null,
+    assignee: null,
+    team: { id: "team-1", name: null },
+    parent_task_id: null,
+    url: "https://ones.example.internal/project/#/team/team-1/task/REQ-1",
+    updated_at: undefined,
+  };
+  const fallbackBugEntity = {
+    entity_type: "bug" as const,
+    task_id: "BUG-1",
+    number: 127599,
+    summary: "Bug 127599",
+    task_type: { id: "2eUNAjCL", name: "缺陷" },
+    status: { id: "status-2", name: "待处理" },
+    owner: null,
+    assignee: null,
+    team: { id: "team-1", name: null },
+    parent_task_id: "REQ-1",
+    url: "https://ones.example.internal/project/#/team/team-1/task/BUG-1",
+    updated_at: undefined,
+  };
+  const fallbackResolveRequirement: ResolveTaskResult = {
+    input: "#794",
+    matched: true,
+    entity: fallbackRequirementEntity,
+    candidates: [],
+    resolution_path: [{ step: "normalize_input", value: "#794" }],
+    raw_payload: {},
+  };
+  const fallbackRequirementDetail: RequirementDetailResult = {
+    entity: fallbackRequirementEntity,
+    description: {
+      plain_text: "需求正文",
+      html: "<p>需求正文</p>",
+      rich_text: null,
+    },
+    custom_fields: [],
+    related_tasks: [],
+    raw_payload: {},
+  };
+  const fallbackExecutionTasks: ExecutionTasksResult = {
+    requirement: fallbackRequirementEntity,
+    execution_tasks: [],
+    raw_payload: {},
+  };
+  const fallbackResolveBug: ResolveTaskResult = {
+    input: "#127599",
+    matched: true,
+    entity: fallbackBugEntity,
+    candidates: [],
+    resolution_path: [{ step: "normalize_input", value: "#127599" }],
+    raw_payload: {},
+  };
+  const fallbackBugDetail: BugDetailResult = {
+    entity: fallbackBugEntity,
+    description: {
+      plain_text: "Bug 描述",
+      html: "<p>Bug 描述</p>",
+      rich_text: null,
+    },
+    severity: null,
+    priority: null,
+    related_tasks: [],
+    raw_payload: {},
+  };
+  const fallbackBugParentRequirement: BugParentRequirementResult = {
+    bug: fallbackBugEntity,
+    requirement: fallbackRequirementEntity,
+    resolution_path: [],
+    raw_payload: {},
+  };
+  const fallbackRequirementBugs: RequirementBugsResult = {
+    requirement: fallbackRequirementEntity,
+    bugs: [fallbackBugEntity],
+    count: 1,
+    raw_payload: {},
+  };
+  const fallbackTaskMessages: TaskMessagesResult = {
+    entity: fallbackRequirementEntity,
+    messages: [],
+    raw_payload: {},
+  };
 
   return {
     cfg: baseConfig,
@@ -136,6 +243,23 @@ function createRuntime(overrides?: {
         overrides?.getDocChunksByParsedRef ?? vi.fn().mockResolvedValue(fallbackChunk),
       getDocContextByParsedRef:
         overrides?.getDocContextByParsedRef ?? vi.fn().mockResolvedValue(fallbackContext),
+      resolveRequirement:
+        overrides?.resolveRequirement ?? vi.fn().mockResolvedValue(fallbackResolveRequirement),
+      getRequirementDetail:
+        overrides?.getRequirementDetail ?? vi.fn().mockResolvedValue(fallbackRequirementDetail),
+      getExecutionTasks:
+        overrides?.getExecutionTasks ?? vi.fn().mockResolvedValue(fallbackExecutionTasks),
+      resolveBug:
+        overrides?.resolveBug ?? vi.fn().mockResolvedValue(fallbackResolveBug),
+      getBugDetail:
+        overrides?.getBugDetail ?? vi.fn().mockResolvedValue(fallbackBugDetail),
+      getBugParentRequirement:
+        overrides?.getBugParentRequirement ??
+        vi.fn().mockResolvedValue(fallbackBugParentRequirement),
+      listRequirementBugs:
+        overrides?.listRequirementBugs ?? vi.fn().mockResolvedValue(fallbackRequirementBugs),
+      getTaskMessages:
+        overrides?.getTaskMessages ?? vi.fn().mockResolvedValue(fallbackTaskMessages),
     } as Runtime["client"],
   };
 }
@@ -175,6 +299,14 @@ describe("mcp tools", () => {
         "get_doc_section",
         "get_doc_chunks",
         "get_doc_context",
+        "resolve_requirement",
+        "get_requirement_detail",
+        "get_execution_tasks",
+        "resolve_bug",
+        "get_bug_detail",
+        "get_bug_parent_requirement",
+        "list_requirement_bugs",
+        "get_task_messages",
       ]);
 
       const searchDocs = tools.tools.find((tool) => tool.name === "search_docs");
@@ -183,6 +315,15 @@ describe("mcp tools", () => {
       const getDocSection = tools.tools.find((tool) => tool.name === "get_doc_section");
       const getDocChunks = tools.tools.find((tool) => tool.name === "get_doc_chunks");
       const getDocContext = tools.tools.find((tool) => tool.name === "get_doc_context");
+      const resolveRequirement = tools.tools.find(
+        (tool) => tool.name === "resolve_requirement",
+      );
+      const getRequirementDetail = tools.tools.find(
+        (tool) => tool.name === "get_requirement_detail",
+      );
+      const listRequirementBugs = tools.tools.find(
+        (tool) => tool.name === "list_requirement_bugs",
+      );
 
       expect(searchDocs?.annotations).toMatchObject({
         readOnlyHint: true,
@@ -202,6 +343,15 @@ describe("mcp tools", () => {
       expect(getDocSection?.outputSchema?.properties).toHaveProperty("section");
       expect(getDocChunks?.outputSchema?.properties).toHaveProperty("chunk");
       expect(getDocContext?.outputSchema?.properties).toHaveProperty("strategy");
+      expect(resolveRequirement?.annotations).toMatchObject({
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: true,
+      });
+      expect(resolveRequirement?.outputSchema?.properties).toHaveProperty("entity");
+      expect(getRequirementDetail?.outputSchema?.properties).toHaveProperty("description");
+      expect(listRequirementBugs?.outputSchema?.properties).toHaveProperty("bugs");
     } finally {
       await server.close();
       await client.close();
@@ -412,6 +562,175 @@ describe("mcp tools", () => {
         reason: "question_matches_section_title",
         selected_sections: ["sec-2"],
         truncated: false,
+      });
+    } finally {
+      await server.close();
+      await client.close();
+    }
+  });
+
+  it("returns structuredContent for all work-item tools", async () => {
+    const resolveRequirement = vi.fn().mockResolvedValue({
+      input: "#794",
+      matched: true,
+      entity: {
+        entity_type: "requirement",
+        task_id: "REQ-794",
+        number: 794,
+        summary: "管理后台需求",
+        task_type: { id: "15eiaFu6", name: "需求" },
+        status: { id: "status-1", name: "进行中" },
+        owner: null,
+        assignee: null,
+        team: { id: "63FL1oSZ", name: null },
+        parent_task_id: null,
+        url: "https://ones.example.internal/project/#/team/63FL1oSZ/task/REQ-794",
+        updated_at: undefined,
+      },
+      candidates: [],
+      resolution_path: [{ step: "normalize_input", value: "#794" }],
+      raw_payload: {},
+    } satisfies ResolveTaskResult);
+    const getRequirementDetail = vi.fn().mockResolvedValue({
+      entity: {
+        entity_type: "requirement",
+        task_id: "REQ-794",
+        number: 794,
+        summary: "管理后台需求",
+        task_type: { id: "15eiaFu6", name: "需求" },
+        status: null,
+        owner: null,
+        assignee: null,
+        team: { id: "63FL1oSZ", name: null },
+        parent_task_id: null,
+        url: null,
+      },
+      description: { plain_text: "需求正文", html: "<p>需求正文</p>", rich_text: null },
+      custom_fields: [],
+      related_tasks: [],
+      raw_payload: {},
+    } satisfies RequirementDetailResult);
+    const getExecutionTasks = vi.fn().mockResolvedValue({
+      requirement: (await getRequirementDetail()).entity,
+      execution_tasks: [],
+      raw_payload: {},
+    } satisfies ExecutionTasksResult);
+    const resolveBug = vi.fn().mockResolvedValue({
+      input: "#127599",
+      matched: true,
+      entity: {
+        entity_type: "bug",
+        task_id: "BUG-1",
+        number: 127599,
+        summary: "Bug",
+        task_type: { id: "2eUNAjCL", name: "缺陷" },
+        status: null,
+        owner: null,
+        assignee: null,
+        team: { id: "63FL1oSZ", name: null },
+        parent_task_id: null,
+        url: null,
+      },
+      candidates: [],
+      resolution_path: [],
+      raw_payload: {},
+    } satisfies ResolveTaskResult);
+    const getBugDetail = vi.fn().mockResolvedValue({
+      entity: (await resolveBug()).entity!,
+      description: { plain_text: "Bug 描述", html: "<p>Bug 描述</p>", rich_text: null },
+      severity: null,
+      priority: null,
+      related_tasks: [],
+      raw_payload: {},
+    } satisfies BugDetailResult);
+    const getBugParentRequirement = vi.fn().mockResolvedValue({
+      bug: (await resolveBug()).entity!,
+      requirement: (await getRequirementDetail()).entity,
+      resolution_path: [],
+      raw_payload: {},
+    } satisfies BugParentRequirementResult);
+    const listRequirementBugs = vi.fn().mockResolvedValue({
+      requirement: (await getRequirementDetail()).entity,
+      bugs: [(await resolveBug()).entity!],
+      count: 1,
+      raw_payload: {},
+    } satisfies RequirementBugsResult);
+    const getTaskMessages = vi.fn().mockResolvedValue({
+      entity: (await getRequirementDetail()).entity,
+      messages: [],
+      raw_payload: {},
+    } satisfies TaskMessagesResult);
+    const runtime = createRuntime({
+      resolveRequirement,
+      getRequirementDetail,
+      getExecutionTasks,
+      resolveBug,
+      getBugDetail,
+      getBugParentRequirement,
+      listRequirementBugs,
+      getTaskMessages,
+    });
+    const { client, server } = await connectTestClient(runtime);
+
+    try {
+      const resolveRequirementResult = await client.callTool({
+        name: "resolve_requirement",
+        arguments: { ref: "#794" },
+      });
+
+      if (!("content" in resolveRequirementResult)) {
+        throw new Error("expected CallToolResult");
+      }
+
+      expect(resolveRequirement).toHaveBeenCalledWith("#794");
+      expect(resolveRequirementResult.isError).toBeUndefined();
+      expect(resolveRequirementResult.structuredContent).toMatchObject({
+        matched: true,
+        entity: {
+          entity_type: "requirement",
+          task_id: "REQ-794",
+          number: 794,
+        },
+      });
+      await client.callTool({
+        name: "get_requirement_detail",
+        arguments: { task_id: "REQ-794" },
+      });
+      await client.callTool({
+        name: "get_execution_tasks",
+        arguments: { task_id: "REQ-794" },
+      });
+      await client.callTool({
+        name: "resolve_bug",
+        arguments: { ref: "#127599" },
+      });
+      await client.callTool({
+        name: "get_bug_detail",
+        arguments: { task_id: "BUG-1" },
+      });
+      await client.callTool({
+        name: "get_bug_parent_requirement",
+        arguments: { task_id: "BUG-1" },
+      });
+      const listBugsResult = await client.callTool({
+        name: "list_requirement_bugs",
+        arguments: { task_id: "REQ-794" },
+      });
+      await client.callTool({
+        name: "get_task_messages",
+        arguments: { task_id: "REQ-794" },
+      });
+
+      expect(getRequirementDetail).toHaveBeenCalledWith("REQ-794", undefined);
+      expect(getExecutionTasks).toHaveBeenCalledWith("REQ-794", undefined);
+      expect(resolveBug).toHaveBeenCalledWith("#127599");
+      expect(getBugDetail).toHaveBeenCalledWith("BUG-1", undefined);
+      expect(getBugParentRequirement).toHaveBeenCalledWith("BUG-1", undefined);
+      expect(listRequirementBugs).toHaveBeenCalledWith("REQ-794", undefined);
+      expect(getTaskMessages).toHaveBeenCalledWith("REQ-794", undefined);
+      expect(listBugsResult.structuredContent).toMatchObject({
+        count: 1,
+        bugs: [{ entity_type: "bug", task_id: "BUG-1" }],
       });
     } finally {
       await server.close();

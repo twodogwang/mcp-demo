@@ -332,3 +332,329 @@ it("resolves relative wiki page resources to absolute editor resource urls", asy
     "![image](https://ones.example.internal/wiki/api/wiki/editor/63FL1oSZ/CyyFbXuD/resources/GtOawA3kTPPgoj6A6ZEFIXyTcK4XvrWNnIrlMl_878A.png)",
   );
 });
+
+it("normalizes ONES task info into requirement detail", async () => {
+  const fetchMock = vi.fn<typeof fetch>().mockResolvedValueOnce(
+    new Response(
+      JSON.stringify({
+        uuid: "REQ-794",
+        number: 794,
+        summary: "管理后台BD归属组筛选框兼容部门逻辑",
+        desc: "<p>需求正文</p>",
+        issue_type: { uuid: "15eiaFu6", name: "需求" },
+        status: { uuid: "status-1", name: "进行中" },
+        owner: { uuid: "user-1", name: "张三" },
+        assign: { uuid: "user-2", name: "李四" },
+        team_uuid: "63FL1oSZ",
+        updated_at: "2026-05-14T10:20:30+08:00",
+        related_tasks: [
+          {
+            uuid: "BUG-1",
+            number: 127599,
+            summary: "Buyer管理，BD总监点击转出无反应",
+            issue_type: { uuid: "2eUNAjCL", name: "缺陷" },
+          },
+        ],
+      }),
+      {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      },
+    ),
+  );
+
+  vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
+
+  const client = new OnesClient(
+    {
+      baseUrl: "https://ones.example.internal",
+      defaultTeamId: "63FL1oSZ",
+      timeoutMs: 5000,
+      maxContentChars: 20000,
+      ocr: {
+        provider: null,
+        endpoint: null,
+        apiKey: null,
+        timeoutMs: 1000,
+      },
+    },
+    {
+      getValidAuthHeaders: vi.fn().mockResolvedValue({ Authorization: "Bearer token" }),
+      invalidate: vi.fn(),
+    },
+    {
+      resolveSearchPath: vi.fn(),
+      resolveDocTemplate: vi.fn(),
+      resolveRequirementTemplate: vi.fn(),
+    } as any,
+  );
+
+  const result = await client.getRequirementDetail("REQ-794");
+
+  expect(fetchMock).toHaveBeenCalledWith(
+    "https://ones.example.internal/project/api/project/team/63FL1oSZ/task/REQ-794/info",
+    expect.objectContaining({ method: "GET" }),
+  );
+  expect(result).toMatchObject({
+    entity: {
+      entity_type: "requirement",
+      task_id: "REQ-794",
+      number: 794,
+      summary: "管理后台BD归属组筛选框兼容部门逻辑",
+      task_type: { id: "15eiaFu6", name: "需求" },
+      status: { id: "status-1", name: "进行中" },
+      owner: { id: "user-1", name: "张三" },
+      assignee: { id: "user-2", name: "李四" },
+      team: { id: "63FL1oSZ", name: null },
+      url: "https://ones.example.internal/project/#/team/63FL1oSZ/task/REQ-794",
+    },
+    description: {
+      plain_text: "需求正文",
+      html: "<p>需求正文</p>",
+    },
+    related_tasks: [
+      {
+        entity_type: "bug",
+        task_id: "BUG-1",
+        number: 127599,
+      },
+    ],
+  });
+});
+
+it("resolves requirement number through task search", async () => {
+  const fetchMock = vi.fn<typeof fetch>().mockResolvedValueOnce(
+    new Response(
+      JSON.stringify({
+        tasks: [
+          {
+            uuid: "REQ-794",
+            number: 794,
+            summary: "管理后台需求",
+            issue_type: { uuid: "15eiaFu6", name: "需求" },
+            team_uuid: "63FL1oSZ",
+          },
+        ],
+      }),
+      {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      },
+    ),
+  );
+
+  vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
+
+  const client = new OnesClient(
+    {
+      baseUrl: "https://ones.example.internal",
+      defaultTeamId: "63FL1oSZ",
+      timeoutMs: 5000,
+      maxContentChars: 20000,
+      ocr: {
+        provider: null,
+        endpoint: null,
+        apiKey: null,
+        timeoutMs: 1000,
+      },
+    },
+    {
+      getValidAuthHeaders: vi.fn().mockResolvedValue({ Authorization: "Bearer token" }),
+      invalidate: vi.fn(),
+    },
+    {
+      resolveSearchPath: vi.fn(),
+      resolveDocTemplate: vi.fn(),
+      resolveRequirementTemplate: vi.fn(),
+    } as any,
+  );
+
+  const result = await client.resolveRequirement("#794");
+
+  expect(fetchMock).toHaveBeenCalledWith(
+    "https://ones.example.internal/project/api/project/team/63FL1oSZ/task/search",
+    expect.objectContaining({
+      method: "POST",
+      body: JSON.stringify({ keywords: "794", number: 794 }),
+    }),
+  );
+  expect(result).toMatchObject({
+    input: "#794",
+    matched: true,
+    entity: {
+      entity_type: "requirement",
+      task_id: "REQ-794",
+      number: 794,
+    },
+    resolution_path: [
+      { step: "normalize_input", value: "#794" },
+      { step: "search_task_by_number", value: "794" },
+    ],
+  });
+});
+
+it("requires default team id when resolving numeric work-item refs", async () => {
+  const client = new OnesClient(
+    {
+      baseUrl: "https://ones.example.internal",
+      defaultTeamId: null,
+      timeoutMs: 5000,
+      maxContentChars: 20000,
+      ocr: {
+        provider: null,
+        endpoint: null,
+        apiKey: null,
+        timeoutMs: 1000,
+      },
+    },
+    {
+      getValidAuthHeaders: vi.fn().mockResolvedValue({ Authorization: "Bearer token" }),
+      invalidate: vi.fn(),
+    },
+    {
+      resolveSearchPath: vi.fn(),
+      resolveDocTemplate: vi.fn(),
+      resolveRequirementTemplate: vi.fn(),
+    } as any,
+  );
+
+  await expect(client.resolveRequirement("#794")).rejects.toMatchObject({
+    code: "CONFIG_ERROR",
+    message:
+      "ONES_TEAM_ID is required for work-item tools when the task URL does not include a team id",
+  });
+});
+
+it("derives execution tasks, bugs, parent requirement, and messages from task info", async () => {
+  const requirementPayload = {
+    uuid: "REQ-1",
+    number: 47520,
+    summary: "后台管理系统数据权限重构",
+    issue_type: { uuid: "15eiaFu6", name: "需求" },
+    team_uuid: "63FL1oSZ",
+    related_tasks: [
+      {
+        uuid: "TASK-1",
+        number: 94308,
+        summary: "#47520 后台管理系统数据权限重构",
+        issue_type: { uuid: "Q6tBhtVC", name: "任务" },
+      },
+      {
+        uuid: "BUG-1",
+        number: 127599,
+        summary: "Buyer管理，BD总监点击转出无反应",
+        issue_type: { uuid: "2eUNAjCL", name: "缺陷" },
+      },
+    ],
+  };
+  const bugPayload = {
+    uuid: "BUG-1",
+    number: 127599,
+    summary: "Buyer管理，BD总监点击转出无反应",
+    desc: "<p>点击无反应</p>",
+    issue_type: { uuid: "2eUNAjCL", name: "缺陷" },
+    severity: { uuid: "sev-1", name: "严重" },
+    priority: { uuid: "pri-1", name: "高" },
+    team_uuid: "63FL1oSZ",
+    related_tasks: [
+      {
+        uuid: "REQ-1",
+        number: 47520,
+        summary: "后台管理系统数据权限重构",
+        issue_type: { uuid: "15eiaFu6", name: "需求" },
+      },
+    ],
+    messages: [
+      {
+        uuid: "MSG-1",
+        author: { uuid: "user-1", name: "张三" },
+        created_at: "2026-05-14T09:00:00+08:00",
+        content: "<p>只处理后台</p>",
+      },
+    ],
+  };
+  const fetchMock = vi
+    .fn<typeof fetch>()
+    .mockResolvedValueOnce(
+      new Response(JSON.stringify(requirementPayload), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    )
+    .mockResolvedValueOnce(
+      new Response(JSON.stringify(requirementPayload), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    )
+    .mockResolvedValueOnce(
+      new Response(JSON.stringify(bugPayload), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    )
+    .mockResolvedValueOnce(
+      new Response(JSON.stringify(bugPayload), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    )
+    .mockResolvedValueOnce(
+      new Response(JSON.stringify(bugPayload), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+
+  vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
+
+  const client = new OnesClient(
+    {
+      baseUrl: "https://ones.example.internal",
+      defaultTeamId: "63FL1oSZ",
+      timeoutMs: 5000,
+      maxContentChars: 20000,
+      ocr: {
+        provider: null,
+        endpoint: null,
+        apiKey: null,
+        timeoutMs: 1000,
+      },
+    },
+    {
+      getValidAuthHeaders: vi.fn().mockResolvedValue({ Authorization: "Bearer token" }),
+      invalidate: vi.fn(),
+    },
+    {
+      resolveSearchPath: vi.fn(),
+      resolveDocTemplate: vi.fn(),
+      resolveRequirementTemplate: vi.fn(),
+    } as any,
+  );
+
+  await expect(client.getExecutionTasks("REQ-1")).resolves.toMatchObject({
+    execution_tasks: [{ entity_type: "execution_task", task_id: "TASK-1" }],
+  });
+  await expect(client.listRequirementBugs("REQ-1")).resolves.toMatchObject({
+    count: 1,
+    bugs: [{ entity_type: "bug", task_id: "BUG-1" }],
+  });
+  await expect(client.getBugDetail("BUG-1")).resolves.toMatchObject({
+    entity: { entity_type: "bug", task_id: "BUG-1" },
+    severity: { id: "sev-1", name: "严重" },
+    priority: { id: "pri-1", name: "高" },
+  });
+  await expect(client.getBugParentRequirement("BUG-1")).resolves.toMatchObject({
+    bug: { task_id: "BUG-1" },
+    requirement: { entity_type: "requirement", task_id: "REQ-1" },
+  });
+  await expect(client.getTaskMessages("BUG-1")).resolves.toMatchObject({
+    messages: [
+      {
+        id: "MSG-1",
+        author: { id: "user-1", name: "张三" },
+        plain_text: "只处理后台",
+      },
+    ],
+  });
+});

@@ -27,6 +27,23 @@ import { renderMarkdown } from "./documents/render-markdown.js";
 import { createOcrRunner } from "./ocr/ocr-client.js";
 import type { OcrConfig } from "./config.js";
 import type { ParsedRef } from "./ref-parser.js";
+import type {
+  BugDetailResult,
+  BugParentRequirementResult,
+  CustomField,
+  ExecutionTasksResult,
+  RequirementBugsResult,
+  RequirementDetailResult,
+  ResolveTaskResult,
+  ResolutionStep,
+  TaskMessage,
+  TaskMessagesResult,
+  WorkItemDescription,
+  WorkItemEntity,
+  WorkItemEntityType,
+  WorkItemRef,
+  WorkItemUser,
+} from "./work-items/model.js";
 
 export type SessionProvider = {
   getValidAuthHeaders(): Promise<Record<string, string>>;
@@ -35,6 +52,7 @@ export type SessionProvider = {
 
 export type OnesClientConfig = {
   baseUrl: string;
+  defaultTeamId?: string | null;
   timeoutMs: number;
   maxContentChars: number;
   ocr: OcrConfig;
@@ -187,6 +205,112 @@ export class OnesClient {
     return this.buildContextFromLoaded(loaded, options);
   }
 
+  async resolveRequirement(ref: string): Promise<ResolveTaskResult> {
+    return this.resolveTask(ref, "requirement");
+  }
+
+  async getRequirementDetail(
+    taskId: string,
+    teamId?: string,
+  ): Promise<RequirementDetailResult> {
+    const raw = await this.loadTaskInfo(taskId, teamId);
+    const entity = this.normalizeTaskEntity(raw, "requirement", teamId);
+
+    return {
+      entity,
+      description: this.normalizeDescription(raw),
+      custom_fields: this.normalizeCustomFields(raw),
+      related_tasks: this.normalizeRelatedTasks(raw, teamId),
+      raw_payload: raw,
+    };
+  }
+
+  async getExecutionTasks(
+    taskId: string,
+    teamId?: string,
+  ): Promise<ExecutionTasksResult> {
+    const detail = await this.getRequirementDetail(taskId, teamId);
+    return {
+      requirement: detail.entity,
+      execution_tasks: detail.related_tasks.filter(
+        (entity) => entity.entity_type === "execution_task" || entity.entity_type === "task",
+      ),
+      raw_payload: detail.raw_payload,
+    };
+  }
+
+  async resolveBug(ref: string): Promise<ResolveTaskResult> {
+    return this.resolveTask(ref, "bug");
+  }
+
+  async getBugDetail(taskId: string, teamId?: string): Promise<BugDetailResult> {
+    const raw = await this.loadTaskInfo(taskId, teamId);
+    const entity = this.normalizeTaskEntity(raw, "bug", teamId);
+
+    return {
+      entity,
+      description: this.normalizeDescription(raw),
+      severity: this.normalizeRef(raw.severity ?? raw.severity_level),
+      priority: this.normalizeRef(raw.priority),
+      related_tasks: this.normalizeRelatedTasks(raw, teamId),
+      raw_payload: raw,
+    };
+  }
+
+  async getBugParentRequirement(
+    taskId: string,
+    teamId?: string,
+  ): Promise<BugParentRequirementResult> {
+    const detail = await this.getBugDetail(taskId, teamId);
+    const requirement =
+      detail.related_tasks.find((entity) => entity.entity_type === "requirement") ?? null;
+    const resolutionPath: ResolutionStep[] = [
+      { step: "inspect_related_tasks", value: taskId },
+    ];
+
+    if (requirement) {
+      resolutionPath.push({
+        step: "resolve_requirement_from_related_task",
+        value: requirement.task_id,
+      });
+    }
+
+    return {
+      bug: detail.entity,
+      requirement,
+      resolution_path: resolutionPath,
+      raw_payload: detail.raw_payload,
+    };
+  }
+
+  async listRequirementBugs(
+    taskId: string,
+    teamId?: string,
+  ): Promise<RequirementBugsResult> {
+    const detail = await this.getRequirementDetail(taskId, teamId);
+    const bugs = detail.related_tasks.filter((entity) => entity.entity_type === "bug");
+
+    return {
+      requirement: detail.entity,
+      bugs,
+      count: bugs.length,
+      raw_payload: detail.raw_payload,
+    };
+  }
+
+  async getTaskMessages(
+    taskId: string,
+    teamId?: string,
+  ): Promise<TaskMessagesResult> {
+    const raw = await this.loadTaskInfo(taskId, teamId);
+
+    return {
+      entity: this.normalizeTaskEntity(raw, "task", teamId),
+      messages: this.normalizeMessages(raw),
+      raw_payload: raw,
+    };
+  }
+
   private async buildDocDetail(
     metaSource: Record<string, unknown>,
     contentSource: Record<string, unknown>,
@@ -294,6 +418,332 @@ export class OnesClient {
     }
 
     return this.loadDocByRequirementId(parsedRef.requirementId);
+  }
+
+  private async resolveTask(
+    ref: string,
+    expectedType: WorkItemEntityType,
+  ): Promise<ResolveTaskResult> {
+    const input = ref.trim();
+    const resolutionPath: ResolutionStep[] = [
+      { step: "normalize_input", value: input },
+    ];
+    const taskUrl = this.parseTaskUrl(input);
+
+    if (taskUrl) {
+      const raw = await this.loadTaskInfo(taskUrl.taskId, taskUrl.teamId);
+      const entity = this.normalizeTaskEntity(raw, expectedType, taskUrl.teamId);
+      resolutionPath.push({ step: "parse_task_url", value: taskUrl.taskId });
+      return {
+        input,
+        matched: true,
+        entity,
+        candidates: [],
+        resolution_path: resolutionPath,
+        raw_payload: raw,
+      };
+    }
+
+    if (/^[A-Za-z0-9_-]{8,}$/.test(input) && !/^#?\d+$/.test(input)) {
+      const raw = await this.loadTaskInfo(input);
+      const entity = this.normalizeTaskEntity(raw, expectedType);
+      resolutionPath.push({ step: "load_task_by_id", value: input });
+      return {
+        input,
+        matched: true,
+        entity,
+        candidates: [],
+        resolution_path: resolutionPath,
+        raw_payload: raw,
+      };
+    }
+
+    const numberMatch = input.match(/^#?(\d+)$/);
+    if (!numberMatch?.[1]) {
+      throw new AppError("INVALID_DOC_REF", "Invalid ONES task ref");
+    }
+
+    const number = Number(numberMatch[1]);
+    const rawSearch = await this.searchTaskByNumber(number);
+    const candidates = this.pickArrayField(rawSearch, [
+      "tasks",
+      "items",
+      "list",
+      "data",
+      "related_tasks",
+    ]).map((item) => this.normalizeTaskEntity(item, "task"));
+    const entity =
+      candidates.find((candidate) => candidate.entity_type === expectedType) ??
+      candidates[0] ??
+      null;
+
+    resolutionPath.push({ step: "search_task_by_number", value: String(number) });
+
+    return {
+      input,
+      matched: Boolean(entity),
+      entity,
+      candidates,
+      resolution_path: resolutionPath,
+      raw_payload: rawSearch,
+    };
+  }
+
+  private parseTaskUrl(ref: string): { teamId: string; taskId: string } | null {
+    if (!/^https?:\/\//i.test(ref)) {
+      return null;
+    }
+
+    const url = new URL(ref);
+    const text = `${url.pathname}${url.hash}${url.search}`;
+    const match = text.match(/\/team\/([^/?#]+)\/task\/([^/?#&]+)/);
+
+    if (!match?.[1] || !match[2]) {
+      return null;
+    }
+
+    return {
+      teamId: decodeURIComponent(match[1]),
+      taskId: decodeURIComponent(match[2]),
+    };
+  }
+
+  private async searchTaskByNumber(
+    number: number,
+  ): Promise<Record<string, unknown>> {
+    const teamId = this.requireTeamId();
+    return this.requestJson<Record<string, unknown>>(
+      `/project/api/project/team/${encodeURIComponent(teamId)}/task/search`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ keywords: String(number), number }),
+      },
+    );
+  }
+
+  private async loadTaskInfo(
+    taskId: string,
+    teamId?: string,
+  ): Promise<Record<string, unknown>> {
+    const resolvedTeamId = this.requireTeamId(teamId);
+    return this.requestJson<Record<string, unknown>>(
+      `/project/api/project/team/${encodeURIComponent(resolvedTeamId)}/task/${encodeURIComponent(taskId)}/info`,
+      { method: "GET" },
+    );
+  }
+
+  private requireTeamId(teamId?: string): string {
+    const resolved = teamId?.trim() || this.cfg.defaultTeamId?.trim();
+    if (!resolved) {
+      throw new AppError(
+        "CONFIG_ERROR",
+        "ONES_TEAM_ID is required for work-item tools when the task URL does not include a team id",
+      );
+    }
+    return resolved;
+  }
+
+  private normalizeTaskEntity(
+    raw: Record<string, unknown>,
+    fallbackType: WorkItemEntityType,
+    fallbackTeamId?: string,
+  ): WorkItemEntity {
+    const taskId = this.pickString(raw, [
+      "uuid",
+      "task_uuid",
+      "taskId",
+      "task_id",
+      "id",
+      "key",
+    ]);
+    const numberRaw = raw.number ?? raw.issue_number ?? raw.task_number;
+    const number =
+      typeof numberRaw === "number"
+        ? numberRaw
+        : typeof numberRaw === "string" && numberRaw.trim()
+          ? Number(numberRaw)
+          : null;
+    const teamId =
+      this.pickString(raw, ["team_uuid", "team_id", "teamId"]) ??
+      fallbackTeamId ??
+      this.cfg.defaultTeamId ??
+      null;
+    const summary = this.pickString(raw, ["summary", "name", "title"]) ?? taskId ?? "";
+    const taskType = this.normalizeRef(
+      raw.issue_type ?? raw.task_type ?? raw.type ?? raw.issueType,
+    );
+
+    const updatedAt = this.pickString(raw, ["updated_at", "updatedAt", "update_time"]);
+    return {
+      entity_type: this.inferEntityType(taskType, fallbackType),
+      task_id: taskId ?? "",
+      number: Number.isFinite(number) ? number : null,
+      summary,
+      task_type: taskType,
+      status: this.normalizeRef(raw.status ?? raw.status_info),
+      owner: this.normalizeUser(raw.owner ?? raw.owner_info),
+      assignee: this.normalizeUser(raw.assign ?? raw.assignee ?? raw.assignee_info),
+      team: teamId
+        ? {
+            id: teamId,
+            name: this.pickString(raw, ["team_name", "teamName"]),
+          }
+        : null,
+      parent_task_id: this.pickString(raw, [
+        "parent_uuid",
+        "parent_task_id",
+        "parentTaskId",
+      ]),
+      url:
+        teamId && taskId
+          ? `${this.cfg.baseUrl.replace(/\/$/, "")}/project/#/team/${encodeURIComponent(teamId)}/task/${encodeURIComponent(taskId)}`
+          : null,
+      ...(updatedAt ? { updated_at: updatedAt } : {}),
+    };
+  }
+
+  private inferEntityType(
+    taskType: WorkItemRef | null,
+    fallbackType: WorkItemEntityType,
+  ): WorkItemEntityType {
+    const text = `${taskType?.id ?? ""} ${taskType?.name ?? ""}`.toLowerCase();
+    if (/缺陷|bug|defect|2eunajcl/i.test(text)) {
+      return "bug";
+    }
+    if (/需求|requirement|story|15eiafu6/i.test(text)) {
+      return "requirement";
+    }
+    if (/任务|task|execution|q6tbhtvc/i.test(text)) {
+      return "execution_task";
+    }
+    return fallbackType;
+  }
+
+  private normalizeRelatedTasks(
+    raw: Record<string, unknown>,
+    fallbackTeamId?: string,
+  ): WorkItemEntity[] {
+    return this.pickArrayField(raw, [
+      "related_tasks",
+      "relatedTasks",
+      "tasks",
+      "links",
+    ]).map((item) => this.normalizeTaskEntity(item, "task", fallbackTeamId));
+  }
+
+  private normalizeDescription(raw: Record<string, unknown>): WorkItemDescription {
+    const richText =
+      raw.rich_text ?? raw.richText ?? raw.description_rich_text ?? raw.desc_rich_text ?? null;
+    const html = this.pickString(raw, [
+      "html",
+      "description_html",
+      "desc_html",
+      "description",
+      "desc",
+    ]);
+    const plainSource =
+      this.pickString(raw, ["plain_text", "plainText", "description_text", "desc_text"]) ??
+      html ??
+      (typeof richText === "string" ? richText : "");
+
+    return {
+      plain_text: normalizeContent(plainSource, this.cfg.maxContentChars),
+      html,
+      rich_text: richText,
+    };
+  }
+
+  private normalizeCustomFields(raw: Record<string, unknown>): CustomField[] {
+    return this.pickArrayField(raw, [
+      "custom_fields",
+      "customFields",
+      "field_values",
+      "fieldValues",
+    ]).map((field, index) => ({
+      id:
+        this.pickString(field, ["uuid", "id", "field_uuid", "fieldId"]) ??
+        `field-${index}`,
+      name: this.pickString(field, ["name", "field_name", "fieldName"]) ?? "",
+      value: field.value ?? field.field_value ?? field.fieldValue ?? null,
+    }));
+  }
+
+  private normalizeMessages(raw: Record<string, unknown>): TaskMessage[] {
+    return this.pickArrayField(raw, [
+      "messages",
+      "comments",
+      "activities",
+      "notices",
+    ]).map((message, index) => {
+      const html = this.pickString(message, ["html", "content_html", "content"]);
+      const plainSource =
+        this.pickString(message, ["plain_text", "plainText", "text"]) ?? html ?? "";
+      return {
+        id: this.pickString(message, ["uuid", "id"]) ?? `message-${index}`,
+        author: this.normalizeUser(message.author ?? message.user ?? message.creator),
+        created_at:
+          this.pickString(message, ["created_at", "createdAt", "create_time"]) ?? null,
+        plain_text: normalizeContent(plainSource, this.cfg.maxContentChars),
+        html,
+      };
+    });
+  }
+
+  private normalizeRef(raw: unknown): WorkItemRef | null {
+    if (!raw || typeof raw !== "object") {
+      return null;
+    }
+
+    const record = raw as Record<string, unknown>;
+    const id = this.pickString(record, ["uuid", "id", "key"]);
+    if (!id) {
+      return null;
+    }
+
+    return {
+      id,
+      name: this.pickString(record, ["name", "label", "summary", "title"]),
+    };
+  }
+
+  private normalizeUser(raw: unknown): WorkItemUser | null {
+    if (!raw || typeof raw !== "object") {
+      return null;
+    }
+
+    const record = raw as Record<string, unknown>;
+    const id = this.pickString(record, [
+      "uuid",
+      "id",
+      "user_uuid",
+      "org_user_uuid",
+      "key",
+    ]);
+    if (!id) {
+      return null;
+    }
+
+    return {
+      id,
+      name: this.pickString(record, ["name", "user_name", "nickname", "email"]),
+    };
+  }
+
+  private pickString(
+    payload: Record<string, unknown>,
+    fieldNames: string[],
+  ): string | null {
+    for (const name of fieldNames) {
+      const value = payload[name];
+      if (typeof value === "string" && value.trim()) {
+        return value.trim();
+      }
+      if (typeof value === "number" && Number.isFinite(value)) {
+        return String(value);
+      }
+    }
+    return null;
   }
 
   private async loadDocument(

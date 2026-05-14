@@ -18,6 +18,7 @@
 - `ONES_BASE_URL`：ONES 内网根地址
 - `ONES_USERNAME`：登录账号，账号密码模式必填
 - `ONES_PASSWORD`：登录密码，账号密码模式必填
+- `ONES_TEAM_ID`：默认 ONES 项目团队 ID；纯 `#12345` 这类工作项编号入口需要，完整 task URL 可从 URL 里解析 team id
 - `ONES_AUTH_TOKEN`：浏览器会话里的 Bearer token，会话复用模式可选但建议提供
 - `ONES_COOKIE`：浏览器会话里的 Cookie，会话复用模式可选但建议提供
 - `ONES_ORIGIN`：请求使用的 Origin，可选，默认回落到 `ONES_BASE_URL`
@@ -138,6 +139,14 @@ ONES_PASSWORD = "your_password_here"
 - `get_doc_section`
 - `get_doc_chunks`
 - `get_doc_context`
+- `resolve_requirement`
+- `get_requirement_detail`
+- `get_execution_tasks`
+- `resolve_bug`
+- `get_bug_detail`
+- `get_bug_parent_requirement`
+- `list_requirement_bugs`
+- `get_task_messages`
 
 这些工具都会继续返回可读的 JSON 文本内容，同时也会提供 MCP `structuredContent` 供支持结构化结果的客户端直接消费。
 
@@ -347,6 +356,39 @@ OPENAI_BASE_URL=
 
 ```json
 {"ref":"#12345","view":"both","include_raw":true,"include_resources":true}
+```
+
+### 7) 工作项工具
+
+工作项工具用于读取 ONES 需求、任务、bug 和评论事实，服务于需求开发工作流。它们只读，不计算 baseline，也不会自动决定 bug 修复范围。
+
+纯编号入口需要配置 `ONES_TEAM_ID`：
+
+```env
+ONES_TEAM_ID=63FL1oSZ
+```
+
+如果传入完整 task URL，工具会优先使用 URL 里的 team id。
+
+工具列表：
+
+- `resolve_requirement`：把需求号、task id 或 task URL 解析成标准工作项实体
+- `get_requirement_detail`：读取需求正文、字段和关联任务
+- `get_execution_tasks`：读取需求关联的执行任务候选
+- `resolve_bug`：把 bug 号、task id 或 task URL 解析成标准工作项实体
+- `get_bug_detail`：读取 bug 正文、严重级别、优先级和关联任务
+- `get_bug_parent_requirement`：从 bug 的关联任务里反查需求
+- `list_requirement_bugs`：按需列出需求下的 bug
+- `get_task_messages`：读取任务消息或评论
+
+示例参数：
+
+```json
+{"ref":"#794"}
+```
+
+```json
+{"task_id":"REQ-794"}
 ```
 
 ## 发布流程

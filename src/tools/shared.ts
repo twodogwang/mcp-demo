@@ -26,6 +26,8 @@ function formatToolErrorMessage(error: unknown): string {
         return "ONES authentication failed. Refresh ONES_AUTH_TOKEN/ONES_COOKIE, or check ONES_USERNAME and ONES_PASSWORD.";
       case "INVALID_DOC_REF":
         return "Invalid ref. Use a full ONES document URL or a #requirement id.";
+      case "CONFIG_ERROR":
+        return error.message;
       case "NO_LINKED_DOC":
         return "No linked docs found for the requirement. Check whether the requirement has linked wiki docs.";
       case "NOT_FOUND":
