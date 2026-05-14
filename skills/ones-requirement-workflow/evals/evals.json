@@ -1,0 +1,49 @@
+{
+  "skill_name": "ones-requirement-workflow",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "同步 #47520 这个 ONES 需求并整理到需求档案，先不要处理 bug。",
+      "expected_output": "应识别为 sync_requirement；应说明只同步需求主档案、执行任务、baseline 和 figma-map 初始表；不得默认调用或落档 bug 列表；结束在 await_human_action。",
+      "files": [],
+      "expectations": [
+        "Output identifies the intent as sync_requirement or follows the requirement entry flow.",
+        "Output states that bug lists are not fetched by default.",
+        "Output ends at await_human_action or an equivalent human action gate."
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "查看 #47520 下面有哪些 bug。",
+      "expected_output": "应识别为 list_requirement_bugs；应说明这是人工触发的按需 bug 列表流程；只展示列表，不为每个 bug 创建档案。",
+      "files": [],
+      "expectations": [
+        "Output identifies the intent as list_requirement_bugs or follows the bug list flow.",
+        "Output states the bug list is explicitly requested by the user.",
+        "Output states that listing bugs does not create archives for every bug."
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "帮我修复 bug #127599。",
+      "expected_output": "应识别为 repair_bug；应先进入 triage 和 episode 分类；必须停在 owner decision 或 repair brief confirmation，不得直接开始改代码。",
+      "files": [],
+      "expectations": [
+        "Output identifies the intent as repair_bug or follows the bug repair flow.",
+        "Output includes triage and episode classification before implementation.",
+        "Output requires owner decision and repair brief confirmation before code changes."
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "这个需求有 Figma，但页面到 Figma 的链接我会手动维护，先帮我生成页面和变体映射表。",
+      "expected_output": "应生成或描述 visual/figma-map.yaml 初始表；不得自动填 figma_url；应明确 Figma 只提供视觉参考，不进入 working-baseline。",
+      "files": [],
+      "expectations": [
+        "Output generates or describes visual/figma-map.yaml.",
+        "Output leaves figma_url empty and does not mark entries mapped automatically.",
+        "Output states Figma is visual-only and does not enter working-baseline."
+      ]
+    }
+  ]
+}
