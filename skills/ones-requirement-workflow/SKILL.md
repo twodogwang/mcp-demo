@@ -1,6 +1,6 @@
 ---
 name: ones-requirement-workflow
-description: Use this skill whenever the user asks to work from an ONES requirement number or bug number into development work: syncing a requirement, reading ONES requirement content, building a requirement archive, analyzing requirement scope, checking a specific bug, preparing a bug repair brief, or starting implementation from ONES context. This skill is also required when the user mentions ONES requirement workflow, requirement dossier/archive, bug episode, working baseline, or Figma links tied to ONES requirements.
+description: Use when a user works from ONES requirement or bug numbers, asks about ONES requirement development, ONES bugs, requirement archives, working baselines, bug episodes, or Figma visual mappings tied to ONES-driven development.
 ---
 
 # ONES Requirement Workflow
