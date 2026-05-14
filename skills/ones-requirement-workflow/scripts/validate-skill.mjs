@@ -4,6 +4,7 @@ import path from "node:path";
 const skillRoot = path.resolve(import.meta.dirname, "..");
 const skillPath = path.join(skillRoot, "SKILL.md");
 const evalsPath = path.join(skillRoot, "evals", "evals.json");
+const smokePath = path.join(skillRoot, "test-runs", "2026-05-14-794-smoke.md");
 
 function fail(message) {
   console.error(message);
@@ -67,6 +68,21 @@ for (const item of evals.evals) {
   if (!Array.isArray(item.expectations) || item.expectations.length === 0) {
     fail(`Eval ${item.id} must include expectations.`);
   }
+}
+
+const hasBlockedRunEval = evals.evals.some((item) =>
+  String(item.prompt).includes("#794") &&
+  item.expectations.some((expectation) =>
+    expectation.includes("does not create a fabricated archive"),
+  ),
+);
+
+if (!hasBlockedRunEval) {
+  fail("evals.json must cover the blocked #794 tool-unavailable scenario.");
+}
+
+if (!fs.existsSync(smokePath)) {
+  fail("Missing #794 smoke test record.");
 }
 
 if (process.exitCode) {

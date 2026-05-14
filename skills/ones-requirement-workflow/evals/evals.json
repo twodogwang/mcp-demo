@@ -44,6 +44,18 @@
         "Output leaves figma_url empty and does not mark entries mapped automatically.",
         "Output states Figma is visual-only and does not enter working-baseline."
       ]
+    },
+    {
+      "id": 5,
+      "prompt": "使用 #794 这个需求进行 skill 测试，但当前只有 wiki 文档 MCP，需求工作项工具不可用。",
+      "expected_output": "应识别为 requirement workflow 测试；应优先使用可用的只读文档工具；如果无法获取内容，应报告阻塞原因，不使用 requirements MCP，不默认拉 bug，不创建伪造档案。",
+      "files": [],
+      "expectations": [
+        "Output reports missing or unavailable work-item-domain tools when they are needed.",
+        "Output does not use the requirements MCP.",
+        "Output does not create a fabricated archive or infer requirement body from unavailable data.",
+        "Output does not fetch or list bugs by default."
+      ]
     }
   ]
 }
