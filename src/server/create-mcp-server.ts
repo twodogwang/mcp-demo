@@ -7,6 +7,7 @@ import { registerGetDocTool } from "../tools/get-doc.js";
 import { registerGetDocOutlineTool } from "../tools/get-doc-outline.js";
 import { registerGetDocSectionTool } from "../tools/get-doc-section.js";
 import { registerSearchDocsTool } from "../tools/search-docs.js";
+import { registerWorkItemTools } from "../tools/work-items.js";
 
 export type CreateMcpServerOptions = {
   getRuntime?: ReturnType<typeof createRuntimeLoader>;
@@ -26,6 +27,7 @@ export function createMcpServer(options: CreateMcpServerOptions = {}) {
   registerGetDocSectionTool(server, getRuntime);
   registerGetDocChunksTool(server, getRuntime);
   registerGetDocContextTool(server, getRuntime);
+  registerWorkItemTools(server, getRuntime);
 
   return server;
 }

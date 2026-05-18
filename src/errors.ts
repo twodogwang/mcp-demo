@@ -3,6 +3,7 @@ export type ErrorCode =
   | "NOT_FOUND"
   | "UPSTREAM_ERROR"
   | "INVALID_DOC_REF"
+  | "CONFIG_ERROR"
   | "NO_LINKED_DOC"
   | "DISCOVERY_FAILED";
 

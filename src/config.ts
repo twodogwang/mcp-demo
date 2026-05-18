@@ -14,6 +14,7 @@ export type AppConfig = {
   baseUrl: string;
   username: string | null;
   password: string | null;
+  defaultTeamId: string | null;
   externalSession: ExternalSessionConfig | null;
   timeoutMs: number;
   maxContentChars: number;
@@ -89,6 +90,7 @@ export function loadConfig(): AppConfig {
     baseUrl,
     username,
     password,
+    defaultTeamId: optionalGet("ONES_TEAM_ID"),
     externalSession,
     timeoutMs: optionalNumberGet("ONES_TIMEOUT_MS", 15000),
     maxContentChars: optionalNumberGet("ONES_MAX_CONTENT_CHARS", 20000),
