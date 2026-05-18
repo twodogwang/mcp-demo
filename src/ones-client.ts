@@ -38,6 +38,13 @@ import type {
   ResolutionStep,
   TaskMessage,
   TaskMessagesResult,
+  RelatedWikiPagesResult,
+  RequirementExternalLink,
+  RequirementMaterialsCompleteness,
+  RequirementMaterialsResult,
+  RequirementWikiPage,
+  TaskRichResource,
+  TaskRichResourcesResult,
   WorkItemDescription,
   WorkItemEntity,
   WorkItemEntityType,
@@ -85,6 +92,23 @@ const DEFAULT_GET_DOC_SECTION_OPTIONS: GetDocSectionOptions = {
   includeDescendants: false,
   includeResources: true,
 };
+
+const SEARCH_TASKS_BY_NUMBER_QUERY = `
+  query GROUP_TASK_DATA($groupBy: GroupBy, $groupOrderBy: OrderBy, $orderBy: OrderBy, $filterGroup: [Filter!], $search: Search, $pagination: Pagination, $limit: Int) {
+    buckets(groupBy: $groupBy, orderBy: $groupOrderBy, pagination: $pagination, filter: $search) {
+      key
+      tasks(filterGroup: $filterGroup, orderBy: $orderBy, limit: $limit, includeAncestors: { pathField: "path" }) {
+        key uuid number name
+        issueType { uuid name detailType }
+        status { uuid name category }
+        priority { value }
+        assign { uuid name }
+        owner { uuid name }
+        project { uuid name }
+      }
+    }
+  }
+`;
 
 export class OnesClient {
   private readonly ocrRunner: ReturnType<typeof createOcrRunner>;
@@ -311,6 +335,298 @@ export class OnesClient {
     };
   }
 
+  async extractRequirementMaterials(
+    taskId: string,
+    teamId?: string,
+  ): Promise<RequirementMaterialsResult> {
+    const raw = await this.loadTaskInfo(taskId, teamId);
+    const requirement = this.normalizeTaskEntity(raw, "requirement", teamId);
+    const textSources = this.collectMaterialTextSources(raw);
+    const wikiPages = this.extractRequirementWikiPages(
+      raw,
+      textSources,
+      requirement.team?.id ?? teamId ?? null,
+    );
+    const externalLinks = this.extractRequirementExternalLinks(textSources);
+    const richResources = this.extractTaskRichResourcesFromTextSources(textSources);
+
+    return {
+      requirement,
+      wiki_pages: wikiPages,
+      external_links: externalLinks,
+      rich_resources: richResources,
+      completeness: this.buildRequirementMaterialsCompleteness(
+        this.normalizeDescription(raw),
+        wikiPages,
+        externalLinks,
+        richResources,
+      ),
+      raw_payload: raw,
+    };
+  }
+
+  async getRelatedWikiPages(
+    taskId: string,
+    teamId?: string,
+  ): Promise<RelatedWikiPagesResult> {
+    const materials = await this.extractRequirementMaterials(taskId, teamId);
+    return {
+      requirement: materials.requirement,
+      wiki_pages: materials.wiki_pages,
+      raw_payload: materials.raw_payload,
+    };
+  }
+
+  async getTaskRichResources(
+    taskId: string,
+    teamId?: string,
+  ): Promise<TaskRichResourcesResult> {
+    const raw = await this.loadTaskInfo(taskId, teamId);
+    return {
+      entity: this.normalizeTaskEntity(raw, "task", teamId),
+      resources: this.extractTaskRichResourcesFromTextSources(
+        this.collectMaterialTextSources(raw),
+      ),
+      raw_payload: raw,
+    };
+  }
+
+  private collectMaterialTextSources(
+    raw: Record<string, unknown>,
+  ): Array<{ source: string; text: string }> {
+    const sources: Array<{ source: string; text: string }> = [];
+    const add = (source: string, value: unknown) => {
+      if (typeof value === "string" && value.trim()) {
+        sources.push({ source, text: value });
+      }
+    };
+
+    add("desc", raw.desc);
+    add("desc_rich", raw.desc_rich);
+    add("description", raw.description);
+    add("description_html", raw.description_html);
+    add("html", raw.html);
+
+    for (const field of this.pickArrayField(raw, ["field_values", "fieldValues"])) {
+      const fieldId = this.pickString(field, ["field_uuid", "fieldId", "uuid", "id"]);
+      add(fieldId ? `field_values.${fieldId}` : "field_values", field.value);
+    }
+
+    for (const field of this.pickArrayField(raw, ["custom_fields", "customFields"])) {
+      const fieldId = this.pickString(field, ["field_uuid", "fieldId", "uuid", "id"]);
+      add(fieldId ? `custom_fields.${fieldId}` : "custom_fields", field.value);
+    }
+
+    return sources;
+  }
+
+  private extractRequirementWikiPages(
+    raw: Record<string, unknown>,
+    textSources: Array<{ source: string; text: string }>,
+    fallbackTeamId: string | null,
+  ): RequirementWikiPage[] {
+    const pages = new Map<string, RequirementWikiPage>();
+    const addPage = (page: RequirementWikiPage) => {
+      const key = `${page.team_id ?? ""}:${page.page_id}`;
+      if (!pages.has(key)) {
+        pages.set(key, page);
+      }
+    };
+
+    for (const page of this.pickArrayField(raw, [
+      "related_wiki_pages",
+      "relatedWikiPages",
+    ])) {
+      const pageId = this.pickString(page, ["uuid", "id", "page_id", "pageId"]);
+      if (!pageId) {
+        continue;
+      }
+      const teamId =
+        this.pickString(page, ["team_uuid", "team_id", "teamId"]) ?? fallbackTeamId;
+      addPage({
+        page_id: pageId,
+        team_id: teamId,
+        title: this.pickString(page, ["title", "name"]),
+        url:
+          teamId && pageId
+            ? `${this.cfg.baseUrl.replace(/\/$/, "")}/wiki#/team/${encodeURIComponent(teamId)}/page/${encodeURIComponent(pageId)}`
+            : null,
+        source: "related_wiki_pages",
+        error: this.pickString(page, ["errorMessage", "error_message", "error"]),
+      });
+    }
+
+    for (const source of textSources) {
+      for (const url of this.extractUrls(source.text)) {
+        const parsed = this.parseWikiPageUrl(url, fallbackTeamId);
+        if (!parsed) {
+          continue;
+        }
+        addPage({
+          page_id: parsed.pageId,
+          team_id: parsed.teamId,
+          title: null,
+          url,
+          source: source.source,
+          error: null,
+        });
+      }
+    }
+
+    return Array.from(pages.values());
+  }
+
+  private extractRequirementExternalLinks(
+    textSources: Array<{ source: string; text: string }>,
+  ): RequirementExternalLink[] {
+    const links = new Map<string, RequirementExternalLink>();
+    const resourceUrls = new Set(
+      this.extractTaskRichResourcesFromTextSources(textSources)
+        .map((resource) => resource.src)
+        .filter((src): src is string => Boolean(src)),
+    );
+    for (const source of textSources) {
+      for (const url of this.extractUrls(source.text)) {
+        if (this.parseWikiPageUrl(url, null) || resourceUrls.has(url)) {
+          continue;
+        }
+        const kind = this.classifyExternalLink(url);
+        const key = `${kind}:${url}`;
+        if (!links.has(key)) {
+          links.set(key, { url, kind, source: source.source });
+        }
+      }
+    }
+    return Array.from(links.values());
+  }
+
+  private extractTaskRichResourcesFromTextSources(
+    textSources: Array<{ source: string; text: string }>,
+  ): TaskRichResource[] {
+    const resources = new Map<string, TaskRichResource>();
+    for (const source of textSources) {
+      const imageTags = source.text.match(/<img\b[^>]*>/gi) ?? [];
+      for (const tag of imageTags) {
+        const src = this.readHtmlAttribute(tag, "src");
+        const resourceId = this.readHtmlAttribute(tag, "data-uuid");
+        const key = resourceId ?? src ?? `${source.source}:${resources.size}`;
+        if (!resources.has(key)) {
+          resources.set(key, {
+            type: "image",
+            resource_id: resourceId,
+            src,
+            mime_type: this.readHtmlAttribute(tag, "data-mime"),
+            alt: this.readHtmlAttribute(tag, "alt"),
+            ref_id: this.readHtmlAttribute(tag, "data-ref-id"),
+            ref_type: this.readHtmlAttribute(tag, "data-ref-type"),
+            source: source.source,
+          });
+        }
+      }
+    }
+    return Array.from(resources.values());
+  }
+
+  private buildRequirementMaterialsCompleteness(
+    description: WorkItemDescription,
+    wikiPages: RequirementWikiPage[],
+    externalLinks: RequirementExternalLink[],
+    richResources: TaskRichResource[],
+  ): RequirementMaterialsCompleteness {
+    const hasRequirementBody = Boolean(description.plain_text.trim());
+    const checks = {
+      has_requirement_body: hasRequirementBody,
+      has_related_wiki_pages: wikiPages.length > 0,
+      has_external_links: externalLinks.length > 0,
+      has_rich_resources: richResources.length > 0,
+    };
+    const missing: string[] = [];
+    const nextActions: string[] = [];
+
+    if (!checks.has_requirement_body) {
+      missing.push("requirement_body");
+    }
+    if (checks.has_related_wiki_pages) {
+      nextActions.push("fetch_related_wiki_pages");
+    }
+    if (checks.has_external_links) {
+      nextActions.push("review_external_links");
+    }
+    if (checks.has_rich_resources) {
+      nextActions.push("persist_or_review_rich_resources");
+    }
+    nextActions.push("fetch_task_messages_if_needed");
+
+    return {
+      ...checks,
+      missing,
+      next_actions: nextActions,
+    };
+  }
+
+  private extractUrls(text: string): string[] {
+    const urls = new Set<string>();
+    for (const match of text.matchAll(/https?:\/\/[^\s"'<>]+/gi)) {
+      const rawUrl = this.decodeHtmlEntities(match[0] ?? "").replace(/[),.;，。；]+$/g, "");
+      if (rawUrl) {
+        urls.add(rawUrl);
+      }
+    }
+    return Array.from(urls);
+  }
+
+  private parseWikiPageUrl(
+    rawUrl: string,
+    fallbackTeamId: string | null,
+  ): { teamId: string | null; pageId: string } | null {
+    try {
+      const url = new URL(rawUrl);
+      const text = `${url.pathname}${url.hash}${url.search}`;
+      const match =
+        text.match(/\/team\/([^/?#]+)\/space\/[^/?#]+\/page\/([^/?#&]+)/) ??
+        text.match(/\/team\/([^/?#]+)\/page\/([^/?#&]+)/);
+      if (!match?.[2]) {
+        return null;
+      }
+      return {
+        teamId: decodeURIComponent(match[1] ?? fallbackTeamId ?? ""),
+        pageId: decodeURIComponent(match[2]),
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  private classifyExternalLink(
+    url: string,
+  ): RequirementExternalLink["kind"] {
+    if (/giga\.usaxure\.com|axure/i.test(url)) {
+      return "prototype";
+    }
+    if (/doc\.weixin\.qq\.com/i.test(url)) {
+      return "translation_doc";
+    }
+    return "external";
+  }
+
+  private readHtmlAttribute(tag: string, name: string): string | null {
+    const escapedName = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const match = tag.match(
+      new RegExp(`${escapedName}\\s*=\\s*(?:"([^"]*)"|'([^']*)'|([^\\s>]+))`, "i"),
+    );
+    const value = match?.[1] ?? match?.[2] ?? match?.[3];
+    return value ? this.decodeHtmlEntities(value) : null;
+  }
+
+  private decodeHtmlEntities(value: string): string {
+    return value
+      .replace(/&amp;/g, "&")
+      .replace(/&quot;/g, '"')
+      .replace(/&#39;/g, "'")
+      .replace(/&lt;/g, "<")
+      .replace(/&gt;/g, ">");
+  }
+
   private async buildDocDetail(
     metaSource: Record<string, unknown>,
     contentSource: Record<string, unknown>,
@@ -465,19 +781,18 @@ export class OnesClient {
 
     const number = Number(numberMatch[1]);
     const rawSearch = await this.searchTaskByNumber(number);
-    const candidates = this.pickArrayField(rawSearch, [
-      "tasks",
-      "items",
-      "list",
-      "data",
-      "related_tasks",
-    ]).map((item) => this.normalizeTaskEntity(item, "task"));
+    const candidates = this.extractTaskSearchItems(rawSearch).map((item) =>
+      this.normalizeTaskEntity(item, "task"),
+    );
     const entity =
       candidates.find((candidate) => candidate.entity_type === expectedType) ??
       candidates[0] ??
       null;
 
-    resolutionPath.push({ step: "search_task_by_number", value: String(number) });
+    resolutionPath.push({
+      step: "search_task_by_number_graphql",
+      value: String(number),
+    });
 
     return {
       input,
@@ -496,7 +811,9 @@ export class OnesClient {
 
     const url = new URL(ref);
     const text = `${url.pathname}${url.hash}${url.search}`;
-    const match = text.match(/\/team\/([^/?#]+)\/task\/([^/?#&]+)/);
+    const match = text.match(
+      /\/(?:workspace\/)?team\/([^/?#]+)\/(?:[^/?#&]+\/)*task\/([^/?#&]+)/,
+    );
 
     if (!match?.[1] || !match[2]) {
       return null;
@@ -513,13 +830,44 @@ export class OnesClient {
   ): Promise<Record<string, unknown>> {
     const teamId = this.requireTeamId();
     return this.requestJson<Record<string, unknown>>(
-      `/project/api/project/team/${encodeURIComponent(teamId)}/task/search`,
+      `/project/api/project/team/${encodeURIComponent(teamId)}/items/graphql?t=group-task-data`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ keywords: String(number), number }),
+        body: JSON.stringify({
+          query: SEARCH_TASKS_BY_NUMBER_QUERY,
+          variables: {
+            groupBy: { tasks: {} },
+            groupOrderBy: null,
+            orderBy: { createTime: "DESC" },
+            filterGroup: [{ number_in: [number] }],
+            search: null,
+            pagination: { limit: 10, preciseCount: false },
+            limit: 10,
+          },
+        }),
       },
     );
+  }
+
+  private extractTaskSearchItems(raw: Record<string, unknown>): Record<string, unknown>[] {
+    const directItems = this.pickArrayField(raw, [
+      "tasks",
+      "items",
+      "list",
+      "related_tasks",
+    ]);
+    if (directItems.length > 0) {
+      return directItems;
+    }
+
+    const data = raw.data;
+    if (!data || typeof data !== "object") {
+      return this.pickArrayField(raw, ["data"]);
+    }
+
+    const buckets = this.pickArrayField(data as Record<string, unknown>, ["buckets"]);
+    return buckets.flatMap((bucket) => this.pickArrayField(bucket, ["tasks"]));
   }
 
   private async loadTaskInfo(
@@ -590,11 +938,14 @@ export class OnesClient {
             name: this.pickString(raw, ["team_name", "teamName"]),
           }
         : null,
-      parent_task_id: this.pickString(raw, [
-        "parent_uuid",
-        "parent_task_id",
-        "parentTaskId",
-      ]),
+      parent_task_id:
+        this.pickString(raw, ["parent_uuid", "parent_task_id", "parentTaskId"]) ??
+        this.pickString(
+          raw.parent && typeof raw.parent === "object"
+            ? (raw.parent as Record<string, unknown>)
+            : {},
+          ["uuid", "id", "key"],
+        ),
       url:
         teamId && taskId
           ? `${this.cfg.baseUrl.replace(/\/$/, "")}/project/#/team/${encodeURIComponent(teamId)}/task/${encodeURIComponent(taskId)}`

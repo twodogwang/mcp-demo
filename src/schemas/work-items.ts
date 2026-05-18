@@ -122,5 +122,61 @@ export const taskMessagesOutputSchema = z.object({
   raw_payload: z.unknown(),
 });
 
+const requirementWikiPageSchema = z.object({
+  page_id: z.string(),
+  team_id: z.string().nullable(),
+  title: z.string().nullable(),
+  url: z.string().nullable(),
+  source: z.string(),
+  error: z.string().nullable(),
+});
+
+const requirementExternalLinkSchema = z.object({
+  url: z.string(),
+  kind: z.enum(["prototype", "translation_doc", "external"]),
+  source: z.string(),
+});
+
+const taskRichResourceSchema = z.object({
+  type: z.literal("image"),
+  resource_id: z.string().nullable(),
+  src: z.string().nullable(),
+  mime_type: z.string().nullable(),
+  alt: z.string().nullable(),
+  ref_id: z.string().nullable(),
+  ref_type: z.string().nullable(),
+  source: z.string(),
+});
+
+const requirementMaterialsCompletenessSchema = z.object({
+  has_requirement_body: z.boolean(),
+  has_related_wiki_pages: z.boolean(),
+  has_external_links: z.boolean(),
+  has_rich_resources: z.boolean(),
+  missing: z.array(z.string()),
+  next_actions: z.array(z.string()),
+});
+
+export const requirementMaterialsOutputSchema = z.object({
+  requirement: workItemEntitySchema,
+  wiki_pages: z.array(requirementWikiPageSchema),
+  external_links: z.array(requirementExternalLinkSchema),
+  rich_resources: z.array(taskRichResourceSchema),
+  completeness: requirementMaterialsCompletenessSchema,
+  raw_payload: z.unknown(),
+});
+
+export const relatedWikiPagesOutputSchema = z.object({
+  requirement: workItemEntitySchema,
+  wiki_pages: z.array(requirementWikiPageSchema),
+  raw_payload: z.unknown(),
+});
+
+export const taskRichResourcesOutputSchema = z.object({
+  entity: workItemEntitySchema,
+  resources: z.array(taskRichResourceSchema),
+  raw_payload: z.unknown(),
+});
+
 export type WorkItemLookupInput = z.infer<typeof workItemLookupInputSchema>;
 export type WorkItemTaskInput = z.infer<typeof workItemTaskInputSchema>;

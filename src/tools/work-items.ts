@@ -6,7 +6,10 @@ import {
   executionTasksOutputSchema,
   requirementBugsOutputSchema,
   requirementDetailOutputSchema,
+  requirementMaterialsOutputSchema,
+  relatedWikiPagesOutputSchema,
   resolveTaskOutputSchema,
+  taskRichResourcesOutputSchema,
   taskMessagesOutputSchema,
   workItemLookupInputSchema,
   workItemTaskInputSchema,
@@ -176,6 +179,68 @@ export function registerWorkItemTools(
         return createJsonToolResult(await client.getTaskMessages(task_id, team_id));
       } catch (error) {
         return createToolErrorResult("get_task_messages", error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "extract_requirement_materials",
+    {
+      title: "Extract ONES Requirement Materials",
+      description:
+        "Extract wiki pages, external links, rich resources, and completeness hints from a requirement task.",
+      inputSchema: workItemTaskInputSchema,
+      outputSchema: requirementMaterialsOutputSchema,
+      annotations: readOnlyToolAnnotations,
+    },
+    async ({ task_id, team_id }) => {
+      try {
+        const { client } = await getRuntime();
+        return createJsonToolResult(
+          await client.extractRequirementMaterials(task_id, team_id),
+        );
+      } catch (error) {
+        return createToolErrorResult("extract_requirement_materials", error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "get_related_wiki_pages",
+    {
+      title: "Get ONES Requirement Related Wiki Pages",
+      description:
+        "Discover wiki page references attached to or linked from a requirement task.",
+      inputSchema: workItemTaskInputSchema,
+      outputSchema: relatedWikiPagesOutputSchema,
+      annotations: readOnlyToolAnnotations,
+    },
+    async ({ task_id, team_id }) => {
+      try {
+        const { client } = await getRuntime();
+        return createJsonToolResult(await client.getRelatedWikiPages(task_id, team_id));
+      } catch (error) {
+        return createToolErrorResult("get_related_wiki_pages", error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "get_task_rich_resources",
+    {
+      title: "Get ONES Task Rich Resources",
+      description:
+        "Extract rich-text image resources from a requirement, task, or bug body.",
+      inputSchema: workItemTaskInputSchema,
+      outputSchema: taskRichResourcesOutputSchema,
+      annotations: readOnlyToolAnnotations,
+    },
+    async ({ task_id, team_id }) => {
+      try {
+        const { client } = await getRuntime();
+        return createJsonToolResult(await client.getTaskRichResources(task_id, team_id));
+      } catch (error) {
+        return createToolErrorResult("get_task_rich_resources", error);
       }
     },
   );

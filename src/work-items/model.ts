@@ -106,3 +106,59 @@ export type TaskMessagesResult = {
   messages: TaskMessage[];
   raw_payload: unknown;
 };
+
+export type RequirementWikiPage = {
+  page_id: string;
+  team_id: string | null;
+  title: string | null;
+  url: string | null;
+  source: string;
+  error: string | null;
+};
+
+export type RequirementExternalLink = {
+  url: string;
+  kind: "prototype" | "translation_doc" | "external";
+  source: string;
+};
+
+export type TaskRichResource = {
+  type: "image";
+  resource_id: string | null;
+  src: string | null;
+  mime_type: string | null;
+  alt: string | null;
+  ref_id: string | null;
+  ref_type: string | null;
+  source: string;
+};
+
+export type RequirementMaterialsCompleteness = {
+  has_requirement_body: boolean;
+  has_related_wiki_pages: boolean;
+  has_external_links: boolean;
+  has_rich_resources: boolean;
+  missing: string[];
+  next_actions: string[];
+};
+
+export type RequirementMaterialsResult = {
+  requirement: WorkItemEntity;
+  wiki_pages: RequirementWikiPage[];
+  external_links: RequirementExternalLink[];
+  rich_resources: TaskRichResource[];
+  completeness: RequirementMaterialsCompleteness;
+  raw_payload: unknown;
+};
+
+export type RelatedWikiPagesResult = {
+  requirement: WorkItemEntity;
+  wiki_pages: RequirementWikiPage[];
+  raw_payload: unknown;
+};
+
+export type TaskRichResourcesResult = {
+  entity: WorkItemEntity;
+  resources: TaskRichResource[];
+  raw_payload: unknown;
+};
