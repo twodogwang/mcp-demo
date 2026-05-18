@@ -31,6 +31,7 @@ async function createDefaultRuntime(): Promise<Runtime> {
     const client = new OnesClient(
       {
         baseUrl: cfg.baseUrl,
+        defaultTeamId: cfg.defaultTeamId,
         timeoutMs: cfg.timeoutMs,
         maxContentChars: cfg.maxContentChars,
         ocr: cfg.ocr,
