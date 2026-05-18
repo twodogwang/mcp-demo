@@ -175,6 +175,17 @@ describe("mcp tools", () => {
         "get_doc_section",
         "get_doc_chunks",
         "get_doc_context",
+        "resolve_requirement",
+        "get_requirement_detail",
+        "get_execution_tasks",
+        "resolve_bug",
+        "get_bug_detail",
+        "get_bug_parent_requirement",
+        "list_requirement_bugs",
+        "get_task_messages",
+        "extract_requirement_materials",
+        "get_related_wiki_pages",
+        "get_task_rich_resources",
       ]);
 
       const searchDocs = tools.tools.find((tool) => tool.name === "search_docs");
