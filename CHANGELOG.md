@@ -1,5 +1,11 @@
 # @bakarhythm/get-doc-content
 
+## 1.3.0
+
+### Minor Changes
+
+- d1b3318: 新增 ONES work item 系列工具，支持需求、执行任务、缺陷与需求物料信息提取。
+
 ## 1.2.2
 
 ### Patch Changes
