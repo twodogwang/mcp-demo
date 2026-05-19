@@ -1,0 +1,104 @@
+{
+  "skill_name": "ones-requirement-workflow",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "同步 #47520 这个 ONES 需求并整理到需求档案，先不要处理 bug。",
+      "expected_output": "应识别为 sync_requirement；同步 sources、requirement-brief、feature-scenarios；不得默认调用或落档 bug 列表；结束在 await_feature_scenario_confirmation，并询问用户是否确认功能场景拆分、是否补 Figma 映射、下一步动作。",
+      "files": [],
+      "expectations": [
+        "Output identifies the intent as sync_requirement or follows the requirement entry flow.",
+        "Output creates or updates requirement sources, requirement brief, and feature scenarios.",
+        "Output states that bug lists are not fetched by default.",
+        "Output ends at await_feature_scenario_confirmation or an equivalent human gate.",
+        "Output asks concrete human gate questions before continuing."
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "查看 #47520 下面有哪些 bug。",
+      "expected_output": "应识别为 list_requirement_bugs；应说明这是人工触发的按需 bug 列表流程；只展示列表，不为每个 bug 创建档案。",
+      "files": [],
+      "expectations": [
+        "Output identifies the intent as list_requirement_bugs or follows the bug list flow.",
+        "Output states the bug list is explicitly requested by the user.",
+        "Output states that listing bugs does not create archives for every bug."
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "帮我修复 bug #127599。",
+      "expected_output": "应识别为 repair_bug；应先进入 triage 和 episode 分类；必须停在 owner decision 或 repair brief confirmation，不得直接开始改代码。",
+      "files": [],
+      "expectations": [
+        "Output identifies the intent as repair_bug or follows the bug repair flow.",
+        "Output includes triage and episode classification before implementation.",
+        "Output requires owner decision and repair brief confirmation before code changes."
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "这个需求有很多 Figma 图，我会在每个功能场景里手动填链接，帮我生成功能场景拆分。",
+      "expected_output": "应生成或描述 analysis/feature-scenarios.md；Figma 引用应内嵌在 feature/scenario 下；不得自动填 figma_url；应说明 Figma 必须通过 Figma MCP 读取节点，且不作为业务规则来源。",
+      "files": [],
+      "expectations": [
+        "Output generates or describes analysis/feature-scenarios.md.",
+        "Output embeds Figma mapping fields inside feature/scenario entries.",
+        "Output leaves Figma links empty unless manually provided by the user.",
+        "Output states mapped Figma must be read through Figma MCP.",
+        "Output states Figma is visual-only and does not provide business rules or final copy."
+      ]
+    },
+    {
+      "id": 5,
+      "prompt": "使用 #794 这个需求进行 skill 测试，但当前只有 wiki 文档 MCP，需求工作项工具不可用。",
+      "expected_output": "应识别为 requirement workflow 测试；应优先使用可用的只读文档工具；如果无法获取内容，应报告阻塞原因，不使用 requirements MCP，不默认拉 bug，不创建伪造档案。",
+      "files": [],
+      "expectations": [
+        "Output reports missing or unavailable work-item-domain tools when they are needed.",
+        "Output does not use the requirements MCP.",
+        "Output does not create a fabricated archive or infer requirement body from unavailable data.",
+        "Output does not fetch or list bugs by default."
+      ]
+    },
+    {
+      "id": 6,
+      "prompt": "继续补全 #794 的需求物料，检查 PRD/wiki、外部链接、图片资源和评论是否齐全。",
+      "expected_output": "应识别为 complete_requirement_sources；应使用 extract_requirement_materials 等只读工具发现材料缺口；可同步 ONES wiki，但不得自动抓取外部 Axure/腾讯文档；完成后必须回到 feature-scenarios 或人工门禁，不得把完整性提示直接当实现事实。",
+      "files": [],
+      "expectations": [
+        "Output identifies or follows complete_requirement_sources.",
+        "Output uses or requests material extraction tools instead of guessing missing sources.",
+        "Output records external links as source references unless an approved fetch tool exists.",
+        "Output keeps completeness hints out of implementation facts.",
+        "Output asks the user for the next human decision after source completion."
+      ]
+    },
+    {
+      "id": 7,
+      "prompt": "我已经在 F1/S2 填了 Figma 链接，继续生成这个场景的视觉施工说明。",
+      "expected_output": "应识别为 sync_figma_references；必须通过 Figma MCP 读取具体节点上下文；产出 visual/references/<feature>/<scenario>/figma-context.json 和 visual-reference.md；不得用截图或口头描述替代 Figma 节点信息。",
+      "files": [],
+      "expectations": [
+        "Output identifies or follows sync_figma_references.",
+        "Output requires a mapped scenario from analysis/feature-scenarios.md.",
+        "Output uses Figma MCP to read the node context.",
+        "Output rejects screenshots or informal descriptions as substitutes for Figma node data.",
+        "Output writes or describes visual references under visual/references/<feature>/<scenario>/."
+      ]
+    },
+    {
+      "id": 8,
+      "prompt": "基于 #794 已确认的功能场景，开始出前端方案。",
+      "expected_output": "应先检查 feature-scenarios 是否确认、必要 Figma MCP reference 是否完成、code-analysis 是否存在；frontend-plan 必须引用 Feature/Scenario 编号；计划后要做 coverage-check 并停在 await_plan_confirmation。",
+      "files": [],
+      "expectations": [
+        "Output requires confirmed feature scenarios before frontend planning.",
+        "Output checks required Figma MCP visual references before claiming pixel-level implementation.",
+        "Output references feature/scenario IDs in the frontend plan.",
+        "Output requires coverage-check before implementation.",
+        "Output stops at await_plan_confirmation before code changes."
+      ]
+    }
+  ]
+}
