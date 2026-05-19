@@ -9,7 +9,8 @@
   "files": [
     "dist",
     "README.md",
-    ".env.example"
+    ".env.example",
+    "skills/ones-requirement-workflow"
   ],
   "directories": {
     "doc": "docs",
@@ -20,6 +21,7 @@
     "dev": "tsx src/index.ts",
     "debug:page": "tsx scripts/debug-page.ts",
     "eval:llm": "tsx scripts/eval-llm.ts",
+    "skill:validate": "node skills/ones-requirement-workflow/scripts/validate-skill.mjs",
     "clean": "rm -rf dist",
     "build": "npm run clean && tsc -p tsconfig.json",
     "prepack": "npm run build",
