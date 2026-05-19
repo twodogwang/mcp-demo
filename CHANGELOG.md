@@ -1,5 +1,11 @@
 # @bakarhythm/get-doc-content
 
+## 1.3.1
+
+### Patch Changes
+
+- ee6bc9d: 发布 ONES requirement workflow skill 到包内，并补充 skill 校验入口与发布文件清单。
+
 ## 1.3.0
 
 ### Minor Changes
