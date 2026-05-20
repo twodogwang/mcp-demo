@@ -249,6 +249,11 @@ export class OnesClient {
     };
   }
 
+  async getRequirementDetailByRef(ref: string): Promise<RequirementDetailResult> {
+    const entity = await this.resolveTaskEntity(ref, "requirement");
+    return this.getRequirementDetail(entity.task_id, entity.team?.id ?? undefined);
+  }
+
   async getExecutionTasks(
     taskId: string,
     teamId?: string,
@@ -261,6 +266,11 @@ export class OnesClient {
       ),
       raw_payload: detail.raw_payload,
     };
+  }
+
+  async getExecutionTasksByRef(ref: string): Promise<ExecutionTasksResult> {
+    const entity = await this.resolveTaskEntity(ref, "requirement");
+    return this.getExecutionTasks(entity.task_id, entity.team?.id ?? undefined);
   }
 
   async resolveBug(ref: string): Promise<ResolveTaskResult> {
@@ -279,6 +289,11 @@ export class OnesClient {
       related_tasks: this.normalizeRelatedTasks(raw, teamId),
       raw_payload: raw,
     };
+  }
+
+  async getBugDetailByRef(ref: string): Promise<BugDetailResult> {
+    const entity = await this.resolveTaskEntity(ref, "bug");
+    return this.getBugDetail(entity.task_id, entity.team?.id ?? undefined);
   }
 
   async getBugParentRequirement(
@@ -307,6 +322,13 @@ export class OnesClient {
     };
   }
 
+  async getBugParentRequirementByRef(
+    ref: string,
+  ): Promise<BugParentRequirementResult> {
+    const entity = await this.resolveTaskEntity(ref, "bug");
+    return this.getBugParentRequirement(entity.task_id, entity.team?.id ?? undefined);
+  }
+
   async listRequirementBugs(
     taskId: string,
     teamId?: string,
@@ -322,6 +344,11 @@ export class OnesClient {
     };
   }
 
+  async listRequirementBugsByRef(ref: string): Promise<RequirementBugsResult> {
+    const entity = await this.resolveTaskEntity(ref, "requirement");
+    return this.listRequirementBugs(entity.task_id, entity.team?.id ?? undefined);
+  }
+
   async getTaskMessages(
     taskId: string,
     teamId?: string,
@@ -333,6 +360,11 @@ export class OnesClient {
       messages: this.normalizeMessages(raw),
       raw_payload: raw,
     };
+  }
+
+  async getTaskMessagesByRef(ref: string): Promise<TaskMessagesResult> {
+    const entity = await this.resolveTaskEntity(ref, "task");
+    return this.getTaskMessages(entity.task_id, entity.team?.id ?? undefined);
   }
 
   async extractRequirementMaterials(
@@ -365,6 +397,16 @@ export class OnesClient {
     };
   }
 
+  async extractRequirementMaterialsByRef(
+    ref: string,
+  ): Promise<RequirementMaterialsResult> {
+    const entity = await this.resolveTaskEntity(ref, "requirement");
+    return this.extractRequirementMaterials(
+      entity.task_id,
+      entity.team?.id ?? undefined,
+    );
+  }
+
   async getRelatedWikiPages(
     taskId: string,
     teamId?: string,
@@ -375,6 +417,11 @@ export class OnesClient {
       wiki_pages: materials.wiki_pages,
       raw_payload: materials.raw_payload,
     };
+  }
+
+  async getRelatedWikiPagesByRef(ref: string): Promise<RelatedWikiPagesResult> {
+    const entity = await this.resolveTaskEntity(ref, "requirement");
+    return this.getRelatedWikiPages(entity.task_id, entity.team?.id ?? undefined);
   }
 
   async getTaskRichResources(
@@ -389,6 +436,11 @@ export class OnesClient {
       ),
       raw_payload: raw,
     };
+  }
+
+  async getTaskRichResourcesByRef(ref: string): Promise<TaskRichResourcesResult> {
+    const entity = await this.resolveTaskEntity(ref, "task");
+    return this.getTaskRichResources(entity.task_id, entity.team?.id ?? undefined);
   }
 
   private collectMaterialTextSources(
@@ -802,6 +854,20 @@ export class OnesClient {
       resolution_path: resolutionPath,
       raw_payload: rawSearch,
     };
+  }
+
+  private async resolveTaskEntity(
+    ref: string,
+    expectedType: WorkItemEntityType,
+  ): Promise<WorkItemEntity> {
+    const resolved = await this.resolveTask(ref, expectedType);
+    if (!resolved.entity) {
+      throw new AppError("NOT_FOUND", `ONES ${expectedType} not found`, 404);
+    }
+    if (expectedType !== "task" && resolved.entity.entity_type !== expectedType) {
+      throw new AppError("NOT_FOUND", `ONES ${expectedType} not found`, 404);
+    }
+    return resolved.entity;
   }
 
   private parseTaskUrl(ref: string): { teamId: string; taskId: string } | null {
