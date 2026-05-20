@@ -4,10 +4,11 @@
     {
       "id": 1,
       "prompt": "同步 #47520 这个 ONES 需求并整理到需求档案，先不要处理 bug。",
-      "expected_output": "应识别为 sync_requirement；同步 sources、requirement-brief、feature-scenarios；不得默认调用或落档 bug 列表；结束在 await_feature_scenario_confirmation，并询问用户是否确认功能场景拆分、是否补 Figma 映射、下一步动作。",
+      "expected_output": "应识别为 sync_requirement；优先使用 get_requirement_detail_by_ref、get_execution_tasks_by_ref、extract_requirement_materials_by_ref 同步 sources、requirement-brief、feature-scenarios；不得默认调用或落档 bug 列表；结束在 await_feature_scenario_confirmation，并询问用户是否确认功能场景拆分、是否补 Figma 映射、下一步动作。",
       "files": [],
       "expectations": [
         "Output identifies the intent as sync_requirement or follows the requirement entry flow.",
+        "Output uses by_ref work-item tools as the normal entry point from a requirement number.",
         "Output creates or updates requirement sources, requirement brief, and feature scenarios.",
         "Output states that bug lists are not fetched by default.",
         "Output ends at await_feature_scenario_confirmation or an equivalent human gate.",
@@ -17,10 +18,11 @@
     {
       "id": 2,
       "prompt": "查看 #47520 下面有哪些 bug。",
-      "expected_output": "应识别为 list_requirement_bugs；应说明这是人工触发的按需 bug 列表流程；只展示列表，不为每个 bug 创建档案。",
+      "expected_output": "应识别为 list_requirement_bugs；应优先使用 list_requirement_bugs_by_ref；应说明这是人工触发的按需 bug 列表流程；只展示列表，不为每个 bug 创建档案。",
       "files": [],
       "expectations": [
         "Output identifies the intent as list_requirement_bugs or follows the bug list flow.",
+        "Output uses list_requirement_bugs_by_ref when starting from a requirement number.",
         "Output states the bug list is explicitly requested by the user.",
         "Output states that listing bugs does not create archives for every bug."
       ]
@@ -28,10 +30,11 @@
     {
       "id": 3,
       "prompt": "帮我修复 bug #127599。",
-      "expected_output": "应识别为 repair_bug；应先进入 triage 和 episode 分类；必须停在 owner decision 或 repair brief confirmation，不得直接开始改代码。",
+      "expected_output": "应识别为 repair_bug；应优先使用 get_bug_detail_by_ref 和 get_bug_parent_requirement_by_ref；应先进入 triage 和 episode 分类；必须停在 owner decision 或 repair brief confirmation，不得直接开始改代码。",
       "files": [],
       "expectations": [
         "Output identifies the intent as repair_bug or follows the bug repair flow.",
+        "Output uses by_ref bug tools as the normal entry point from a bug number.",
         "Output includes triage and episode classification before implementation.",
         "Output requires owner decision and repair brief confirmation before code changes."
       ]
@@ -64,11 +67,11 @@
     {
       "id": 6,
       "prompt": "继续补全 #794 的需求物料，检查 PRD/wiki、外部链接、图片资源和评论是否齐全。",
-      "expected_output": "应识别为 complete_requirement_sources；应使用 extract_requirement_materials 等只读工具发现材料缺口；可同步 ONES wiki，但不得自动抓取外部 Axure/腾讯文档；完成后必须回到 feature-scenarios 或人工门禁，不得把完整性提示直接当实现事实。",
+      "expected_output": "应识别为 complete_requirement_sources；应使用 extract_requirement_materials_by_ref 等只读工具发现材料缺口；可同步 ONES wiki，但不得自动抓取外部 Axure/腾讯文档；完成后必须回到 feature-scenarios 或人工门禁，不得把完整性提示直接当实现事实。",
       "files": [],
       "expectations": [
         "Output identifies or follows complete_requirement_sources.",
-        "Output uses or requests material extraction tools instead of guessing missing sources.",
+        "Output uses or requests by_ref material extraction tools instead of guessing missing sources.",
         "Output records external links as source references unless an approved fetch tool exists.",
         "Output keeps completeness hints out of implementation facts.",
         "Output asks the user for the next human decision after source completion."

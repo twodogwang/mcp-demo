@@ -138,6 +138,26 @@ ONES_PASSWORD = "your_password_here"
 - `get_doc_section`
 - `get_doc_chunks`
 - `get_doc_context`
+- `get_requirement_detail_by_ref`
+- `get_execution_tasks_by_ref`
+- `extract_requirement_materials_by_ref`
+- `list_requirement_bugs_by_ref`
+- `get_task_messages_by_ref`
+- `get_related_wiki_pages_by_ref`
+- `get_task_rich_resources_by_ref`
+- `get_bug_detail_by_ref`
+- `get_bug_parent_requirement_by_ref`
+- `resolve_requirement`
+- `get_requirement_detail`
+- `get_execution_tasks`
+- `resolve_bug`
+- `get_bug_detail`
+- `get_bug_parent_requirement`
+- `list_requirement_bugs`
+- `get_task_messages`
+- `extract_requirement_materials`
+- `get_related_wiki_pages`
+- `get_task_rich_resources`
 
 这些工具都会继续返回可读的 JSON 文本内容，同时也会提供 MCP `structuredContent` 供支持结构化结果的客户端直接消费。
 
@@ -344,6 +364,30 @@ OPENAI_BASE_URL=
 ```json
 {"ref":"#12345","question":"请总结整篇文档的所有权限规则","mode":"auto","max_chars":12000}
 ```
+
+## ONES 工作项工具
+
+从需求号或 bug 号开始时，优先使用 `*_by_ref` 工具。它们会先解析编号、task id 或 task URL，再读取正文或关联信息。
+
+主入口工具：
+
+- `get_requirement_detail_by_ref`：按需求号、task id 或 task URL 读取需求正文、字段和关联任务
+- `get_execution_tasks_by_ref`：按需求引用读取关联执行任务候选
+- `extract_requirement_materials_by_ref`：按需求引用提取 wiki、外部链接、图片资源和完整性提示
+- `list_requirement_bugs_by_ref`：显式需要时，按需求引用列出关联 bug
+- `get_task_messages_by_ref`：按任务引用读取消息或评论
+- `get_related_wiki_pages_by_ref`：按需求引用发现关联或正文链接到的 ONES wiki 页面
+- `get_task_rich_resources_by_ref`：按任务引用提取正文里的富文本图片资源
+- `get_bug_detail_by_ref`：按 bug 号、task id 或 task URL 读取 bug 正文、严重级别、优先级和关联任务
+- `get_bug_parent_requirement_by_ref`：按 bug 引用反查父需求
+
+兼容和调试工具：
+
+- `resolve_requirement`、`resolve_bug`：只解析编号或 URL，返回标准工作项实体和候选列表
+- `get_requirement_detail`、`get_execution_tasks`、`get_bug_detail`、`get_bug_parent_requirement`
+- `list_requirement_bugs`、`get_task_messages`、`extract_requirement_materials`、`get_related_wiki_pages`、`get_task_rich_resources`
+
+兼容工具接收 `task_id`，适合已知 task id、需要处理多候选、或排查编号解析与详情接口哪个环节失败的场景。
 
 ```json
 {"ref":"#12345","view":"both","include_raw":true,"include_resources":true}

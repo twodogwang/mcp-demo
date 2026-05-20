@@ -104,10 +104,9 @@ Legacy archives may still contain `baseline/working-baseline.md` or `visual/figm
 For requirement sync or analysis:
 
 ```text
-resolve_requirement
--> collect_requirement_detail
--> collect_execution_tasks
--> complete_requirement_sources
+get_requirement_detail_by_ref
+-> get_execution_tasks_by_ref
+-> extract_requirement_materials_by_ref
 -> build_or_update_requirement_archive
 -> draft_requirement_brief
 -> draft_feature_scenarios
@@ -132,12 +131,12 @@ Do not silently proceed beyond this gate.
 
 ## Source Completion
 
-`complete_requirement_sources` should call `extract_requirement_materials` to discover wiki pages, external links, rich resources, and next actions. Fetch ONES wiki pages with document-domain tools when discovered.
+`complete_requirement_sources` should call `extract_requirement_materials_by_ref` to discover wiki pages, external links, rich resources, and next actions. Fetch ONES wiki pages with document-domain tools when discovered.
 
 Rules:
 
 - Record external links such as Axure or Tencent Docs as source references; do not scrape them unless a separate approved tool exists.
-- Call `get_task_messages` only when the user asks for comments/messages or when the source completeness check says messages are needed for the current decision.
+- Call `get_task_messages_by_ref` only when the user asks for comments/messages or when the source completeness check says messages are needed for the current decision.
 - Material completeness hints go to sources/notes only. They are not implementation facts.
 
 ## Feature Scenarios
@@ -270,8 +269,7 @@ Rules:
 For ONES requirement body changes:
 
 ```text
-resolve_requirement
--> collect_requirement_detail
+get_requirement_detail_by_ref
 -> snapshot_requirement_source
 -> diff_against_latest_snapshot
 -> update_requirement_brief
@@ -287,8 +285,7 @@ If new requirement content conflicts with accepted manual decisions, record the 
 Only list bugs when the user explicitly asks.
 
 ```text
-resolve_requirement
--> list_requirement_bugs
+list_requirement_bugs_by_ref
 -> present_bug_list
 -> await_human_action
 ```
@@ -300,8 +297,8 @@ Do not create one archive directory per listed bug. A bug archive is created onl
 Viewing a bug is read-only triage.
 
 ```text
-resolve_bug
--> resolve_parent_requirement
+get_bug_detail_by_ref
+-> get_bug_parent_requirement_by_ref
 -> build_or_update_requirement_archive_if_missing
 -> sync_bug_into_archive
 -> classify_bug_episode
@@ -316,8 +313,8 @@ At `stop_for_owner_decision`, report the triage result and stop. The user must e
 Repairing a bug still begins with triage and must stop before implementation.
 
 ```text
-resolve_bug
--> resolve_parent_requirement
+get_bug_detail_by_ref
+-> get_bug_parent_requirement_by_ref
 -> build_or_update_requirement_archive_if_missing
 -> sync_bug_into_archive
 -> classify_bug_episode
@@ -415,7 +412,19 @@ Work-item tools should use a normalized entity shell with standard fields such a
 }
 ```
 
-Expected read-only work-item tools:
+Primary read-only work-item tools for normal workflow entry:
+
+- `get_requirement_detail_by_ref`
+- `get_execution_tasks_by_ref`
+- `extract_requirement_materials_by_ref`
+- `list_requirement_bugs_by_ref`
+- `get_task_messages_by_ref`
+- `get_related_wiki_pages_by_ref`
+- `get_task_rich_resources_by_ref`
+- `get_bug_detail_by_ref`
+- `get_bug_parent_requirement_by_ref`
+
+Compatibility and debugging tools:
 
 - `resolve_requirement`
 - `get_requirement_detail`
@@ -428,6 +437,8 @@ Expected read-only work-item tools:
 - `extract_requirement_materials`
 - `get_related_wiki_pages`
 - `get_task_rich_resources`
+
+Use compatibility/debugging tools only when a task id is already known, a `*_by_ref` lookup returns ambiguous candidates, or the workflow needs to isolate whether number resolution or detail loading failed.
 
 If one of these tools is unavailable, report the missing capability and continue with the closest available read-only source. Do not fall back to the separate `requirements` MCP.
 

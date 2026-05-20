@@ -332,3 +332,95 @@ it("resolves relative wiki page resources to absolute editor resource urls", asy
     "![image](https://ones.example.internal/wiki/api/wiki/editor/63FL1oSZ/CyyFbXuD/resources/GtOawA3kTPPgoj6A6ZEFIXyTcK4XvrWNnIrlMl_878A.png)",
   );
 });
+
+it("gets requirement detail directly from a requirement number ref", async () => {
+  const fetchMock = vi
+    .fn<typeof fetch>()
+    .mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          data: {
+            buckets: [
+              {
+                tasks: [
+                  {
+                    uuid: "REQ-1",
+                    number: 794,
+                    name: "提现需求",
+                    issueType: { uuid: "15eiaFu6", name: "需求" },
+                    status: { uuid: "status-1", name: "进行中" },
+                  },
+                ],
+              },
+            ],
+          },
+        }),
+        {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        },
+      ),
+    )
+    .mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          uuid: "REQ-1",
+          number: 794,
+          name: "提现需求",
+          issueType: { uuid: "15eiaFu6", name: "需求" },
+          status: { uuid: "status-1", name: "进行中" },
+          desc: "<p>需求正文</p>",
+        }),
+        {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        },
+      ),
+    );
+
+  vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
+
+  const client = new OnesClient(
+    {
+      baseUrl: "https://ones.example.internal",
+      defaultTeamId: "TEAM-1",
+      timeoutMs: 5000,
+      maxContentChars: 20000,
+      ocr: {
+        provider: null,
+        endpoint: null,
+        apiKey: null,
+        timeoutMs: 1000,
+      },
+    },
+    {
+      getValidAuthHeaders: vi.fn().mockResolvedValue({ Authorization: "Bearer token" }),
+      invalidate: vi.fn(),
+    },
+    {
+      resolveSearchPath: vi.fn(),
+      resolveDocTemplate: vi.fn(),
+      resolveRequirementTemplate: vi.fn(),
+    } as any,
+  );
+
+  const result = await client.getRequirementDetailByRef("#794");
+
+  expect(fetchMock).toHaveBeenNthCalledWith(
+    1,
+    "https://ones.example.internal/project/api/project/team/TEAM-1/items/graphql?t=group-task-data",
+    expect.objectContaining({ method: "POST" }),
+  );
+  expect(fetchMock).toHaveBeenNthCalledWith(
+    2,
+    "https://ones.example.internal/project/api/project/team/TEAM-1/task/REQ-1/info",
+    expect.objectContaining({ method: "GET" }),
+  );
+  expect(result.entity).toMatchObject({
+    entity_type: "requirement",
+    task_id: "REQ-1",
+    number: 794,
+    summary: "提现需求",
+  });
+  expect(result.description.plain_text).toBe("需求正文");
+});

@@ -14,6 +14,7 @@ import { isCliEntrypoint } from "../src/index";
 import { createMcpServer } from "../src/server/create-mcp-server";
 import { parseGetDocInput } from "../src/schemas/get-doc";
 import type { Runtime } from "../src/services/runtime";
+import type { RequirementDetailResult } from "../src/work-items/model";
 
 const keys = [
   "ONES_BASE_URL",
@@ -48,6 +49,7 @@ function createRuntime(overrides?: {
   getDocSectionByParsedRef?: Runtime["client"]["getDocSectionByParsedRef"];
   getDocChunksByParsedRef?: Runtime["client"]["getDocChunksByParsedRef"];
   getDocContextByParsedRef?: Runtime["client"]["getDocContextByParsedRef"];
+  getRequirementDetailByRef?: Runtime["client"]["getRequirementDetailByRef"];
 }): Runtime {
   const fallbackDoc: DocDetail = {
     doc: {
@@ -136,6 +138,8 @@ function createRuntime(overrides?: {
         overrides?.getDocChunksByParsedRef ?? vi.fn().mockResolvedValue(fallbackChunk),
       getDocContextByParsedRef:
         overrides?.getDocContextByParsedRef ?? vi.fn().mockResolvedValue(fallbackContext),
+      getRequirementDetailByRef:
+        overrides?.getRequirementDetailByRef ?? vi.fn(),
     } as Runtime["client"],
   };
 }
@@ -175,6 +179,15 @@ describe("mcp tools", () => {
         "get_doc_section",
         "get_doc_chunks",
         "get_doc_context",
+        "get_requirement_detail_by_ref",
+        "get_execution_tasks_by_ref",
+        "extract_requirement_materials_by_ref",
+        "list_requirement_bugs_by_ref",
+        "get_task_messages_by_ref",
+        "get_related_wiki_pages_by_ref",
+        "get_task_rich_resources_by_ref",
+        "get_bug_detail_by_ref",
+        "get_bug_parent_requirement_by_ref",
         "resolve_requirement",
         "get_requirement_detail",
         "get_execution_tasks",
@@ -194,6 +207,9 @@ describe("mcp tools", () => {
       const getDocSection = tools.tools.find((tool) => tool.name === "get_doc_section");
       const getDocChunks = tools.tools.find((tool) => tool.name === "get_doc_chunks");
       const getDocContext = tools.tools.find((tool) => tool.name === "get_doc_context");
+      const getRequirementDetailByRef = tools.tools.find(
+        (tool) => tool.name === "get_requirement_detail_by_ref",
+      );
 
       expect(searchDocs?.annotations).toMatchObject({
         readOnlyHint: true,
@@ -213,6 +229,8 @@ describe("mcp tools", () => {
       expect(getDocSection?.outputSchema?.properties).toHaveProperty("section");
       expect(getDocChunks?.outputSchema?.properties).toHaveProperty("chunk");
       expect(getDocContext?.outputSchema?.properties).toHaveProperty("strategy");
+      expect(getRequirementDetailByRef?.inputSchema?.properties).toHaveProperty("ref");
+      expect(getRequirementDetailByRef?.outputSchema?.properties).toHaveProperty("entity");
     } finally {
       await server.close();
       await client.close();
@@ -424,6 +442,53 @@ describe("mcp tools", () => {
         selected_sections: ["sec-2"],
         truncated: false,
       });
+    } finally {
+      await server.close();
+      await client.close();
+    }
+  });
+
+  it("returns structuredContent for get_requirement_detail_by_ref", async () => {
+    const detail: RequirementDetailResult = {
+      entity: {
+        entity_type: "requirement",
+        task_id: "REQ-1",
+        number: 794,
+        summary: "提现需求",
+        task_type: { id: "requirement", name: "需求" },
+        status: null,
+        owner: null,
+        assignee: null,
+        team: { id: "TEAM-1", name: "团队" },
+        parent_task_id: null,
+        url: null,
+      },
+      description: {
+        plain_text: "需求正文",
+        html: "<p>需求正文</p>",
+        rich_text: null,
+      },
+      custom_fields: [],
+      related_tasks: [],
+      raw_payload: { uuid: "REQ-1" },
+    };
+    const getRequirementDetailByRef = vi.fn().mockResolvedValue(detail);
+    const runtime = createRuntime({ getRequirementDetailByRef });
+    const { client, server } = await connectTestClient(runtime);
+
+    try {
+      const result = await client.callTool({
+        name: "get_requirement_detail_by_ref",
+        arguments: { ref: "#794" },
+      });
+
+      if (!("content" in result)) {
+        throw new Error("expected CallToolResult");
+      }
+
+      expect(result.isError).toBeUndefined();
+      expect(getRequirementDetailByRef).toHaveBeenCalledWith("#794");
+      expect(result.structuredContent).toEqual(detail);
     } finally {
       await server.close();
       await client.close();
