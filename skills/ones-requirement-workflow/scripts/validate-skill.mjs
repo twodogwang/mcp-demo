@@ -40,7 +40,13 @@ assertIncludes(frontmatter, "description:", "skill description");
   "stop_for_owner_decision",
   "await_human_confirmation",
   "complete_requirement_sources",
-  "extract_requirement_materials",
+  "get_requirement_detail_by_ref",
+  "get_execution_tasks_by_ref",
+  "extract_requirement_materials_by_ref",
+  "list_requirement_bugs_by_ref",
+  "get_bug_detail_by_ref",
+  "get_bug_parent_requirement_by_ref",
+  "download_ones_resource",
   "analysis/feature-scenarios.md",
   "Figma MCP",
   "visual/references/<feature-key>/<scenario-key>",
@@ -119,6 +125,14 @@ const hasFeatureScenarioEval = evals.evals.some((item) =>
 
 if (!hasFeatureScenarioEval) {
   fail("evals.json must cover feature/scenario decomposition.");
+}
+
+const hasByRefEval = evals.evals.some((item) =>
+  item.expectations.some((expectation) => expectation.includes("by_ref")),
+);
+
+if (!hasByRefEval) {
+  fail("evals.json must cover by_ref work-item tool entry points.");
 }
 
 if (process.exitCode) {

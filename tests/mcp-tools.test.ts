@@ -62,6 +62,15 @@ function createRuntime(overrides?: {
   getDocSectionByParsedRef?: Runtime["client"]["getDocSectionByParsedRef"];
   getDocChunksByParsedRef?: Runtime["client"]["getDocChunksByParsedRef"];
   getDocContextByParsedRef?: Runtime["client"]["getDocContextByParsedRef"];
+  getRequirementDetailByRef?: Runtime["client"]["getRequirementDetailByRef"];
+  getExecutionTasksByRef?: Runtime["client"]["getExecutionTasksByRef"];
+  extractRequirementMaterialsByRef?: Runtime["client"]["extractRequirementMaterialsByRef"];
+  listRequirementBugsByRef?: Runtime["client"]["listRequirementBugsByRef"];
+  getTaskMessagesByRef?: Runtime["client"]["getTaskMessagesByRef"];
+  getRelatedWikiPagesByRef?: Runtime["client"]["getRelatedWikiPagesByRef"];
+  getTaskRichResourcesByRef?: Runtime["client"]["getTaskRichResourcesByRef"];
+  getBugDetailByRef?: Runtime["client"]["getBugDetailByRef"];
+  getBugParentRequirementByRef?: Runtime["client"]["getBugParentRequirementByRef"];
   resolveRequirement?: Runtime["client"]["resolveRequirement"];
   getRequirementDetail?: Runtime["client"]["getRequirementDetail"];
   getExecutionTasks?: Runtime["client"]["getExecutionTasks"];
@@ -314,6 +323,32 @@ function createRuntime(overrides?: {
         overrides?.getDocChunksByParsedRef ?? vi.fn().mockResolvedValue(fallbackChunk),
       getDocContextByParsedRef:
         overrides?.getDocContextByParsedRef ?? vi.fn().mockResolvedValue(fallbackContext),
+      getRequirementDetailByRef:
+        overrides?.getRequirementDetailByRef ??
+        vi.fn().mockResolvedValue(fallbackRequirementDetail),
+      getExecutionTasksByRef:
+        overrides?.getExecutionTasksByRef ??
+        vi.fn().mockResolvedValue(fallbackExecutionTasks),
+      extractRequirementMaterialsByRef:
+        overrides?.extractRequirementMaterialsByRef ??
+        vi.fn().mockResolvedValue(fallbackRequirementMaterials),
+      listRequirementBugsByRef:
+        overrides?.listRequirementBugsByRef ??
+        vi.fn().mockResolvedValue(fallbackRequirementBugs),
+      getTaskMessagesByRef:
+        overrides?.getTaskMessagesByRef ??
+        vi.fn().mockResolvedValue(fallbackTaskMessages),
+      getRelatedWikiPagesByRef:
+        overrides?.getRelatedWikiPagesByRef ??
+        vi.fn().mockResolvedValue(fallbackRelatedWikiPages),
+      getTaskRichResourcesByRef:
+        overrides?.getTaskRichResourcesByRef ??
+        vi.fn().mockResolvedValue(fallbackTaskRichResources),
+      getBugDetailByRef:
+        overrides?.getBugDetailByRef ?? vi.fn().mockResolvedValue(fallbackBugDetail),
+      getBugParentRequirementByRef:
+        overrides?.getBugParentRequirementByRef ??
+        vi.fn().mockResolvedValue(fallbackBugParentRequirement),
       resolveRequirement:
         overrides?.resolveRequirement ?? vi.fn().mockResolvedValue(fallbackResolveRequirement),
       getRequirementDetail:
@@ -382,6 +417,15 @@ describe("mcp tools", () => {
         "get_doc_section",
         "get_doc_chunks",
         "get_doc_context",
+        "get_requirement_detail_by_ref",
+        "get_execution_tasks_by_ref",
+        "extract_requirement_materials_by_ref",
+        "list_requirement_bugs_by_ref",
+        "get_task_messages_by_ref",
+        "get_related_wiki_pages_by_ref",
+        "get_task_rich_resources_by_ref",
+        "get_bug_detail_by_ref",
+        "get_bug_parent_requirement_by_ref",
         "resolve_requirement",
         "get_requirement_detail",
         "get_execution_tasks",
@@ -402,6 +446,9 @@ describe("mcp tools", () => {
       const getDocSection = tools.tools.find((tool) => tool.name === "get_doc_section");
       const getDocChunks = tools.tools.find((tool) => tool.name === "get_doc_chunks");
       const getDocContext = tools.tools.find((tool) => tool.name === "get_doc_context");
+      const getRequirementDetailByRef = tools.tools.find(
+        (tool) => tool.name === "get_requirement_detail_by_ref",
+      );
       const resolveRequirement = tools.tools.find(
         (tool) => tool.name === "resolve_requirement",
       );
@@ -410,6 +457,9 @@ describe("mcp tools", () => {
       );
       const listRequirementBugs = tools.tools.find(
         (tool) => tool.name === "list_requirement_bugs",
+      );
+      const downloadOnesResource = tools.tools.find(
+        (tool) => tool.name === "download_ones_resource",
       );
 
       expect(searchDocs?.annotations).toMatchObject({
@@ -430,6 +480,8 @@ describe("mcp tools", () => {
       expect(getDocSection?.outputSchema?.properties).toHaveProperty("section");
       expect(getDocChunks?.outputSchema?.properties).toHaveProperty("chunk");
       expect(getDocContext?.outputSchema?.properties).toHaveProperty("strategy");
+      expect(getRequirementDetailByRef?.inputSchema?.properties).toHaveProperty("ref");
+      expect(getRequirementDetailByRef?.outputSchema?.properties).toHaveProperty("entity");
       expect(resolveRequirement?.annotations).toMatchObject({
         readOnlyHint: true,
         destructiveHint: false,
@@ -439,6 +491,8 @@ describe("mcp tools", () => {
       expect(resolveRequirement?.outputSchema?.properties).toHaveProperty("entity");
       expect(getRequirementDetail?.outputSchema?.properties).toHaveProperty("description");
       expect(listRequirementBugs?.outputSchema?.properties).toHaveProperty("bugs");
+      expect(downloadOnesResource?.inputSchema?.properties).toHaveProperty("url");
+      expect(downloadOnesResource?.outputSchema?.properties).toHaveProperty("content_base64");
     } finally {
       await server.close();
       await client.close();
@@ -810,6 +864,10 @@ describe("mcp tools", () => {
         name: "resolve_requirement",
         arguments: { ref: "#794" },
       });
+      const requirementDetailByRefResult = await client.callTool({
+        name: "get_requirement_detail_by_ref",
+        arguments: { ref: "#794" },
+      });
 
       if (!("content" in resolveRequirementResult)) {
         throw new Error("expected CallToolResult");
@@ -822,6 +880,13 @@ describe("mcp tools", () => {
         entity: {
           entity_type: "requirement",
           task_id: "REQ-794",
+          number: 794,
+        },
+      });
+      expect(requirementDetailByRefResult.structuredContent).toMatchObject({
+        entity: {
+          entity_type: "requirement",
+          task_id: "REQ-1",
           number: 794,
         },
       });

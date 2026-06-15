@@ -1,5 +1,33 @@
 # @bakarhythm/get-doc-content
 
+## 1.4.0
+
+### Minor Changes
+
+- b492cd5: 新增 ONES work-item `*_by_ref` 工具，支持从需求号、bug 号或任务 URL 直接读取需求、缺陷和物料信息，并更新 workflow skill 默认入口。
+
+## 1.3.1
+
+### Patch Changes
+
+- ee6bc9d: 发布 ONES requirement workflow skill 到包内，并补充 skill 校验入口与发布文件清单。
+
+## 1.3.0
+
+### Minor Changes
+
+- d1b3318: 新增 ONES work item 系列工具，支持需求、执行任务、缺陷与需求物料信息提取。
+
+## 1.2.2
+
+### Patch Changes
+
+- ae09e20: Apply browser-style ONES headers during the password login flow.
+
+  - send `Origin`, `Referer`, and enterprise-WeChat-like `User-Agent` headers on identity login requests
+  - preserve the existing cookie-capture flow across authorize and token exchange requests
+  - unblock ONES tenants that gate account-password login behind browser-context routing
+
 ## 1.2.1
 
 ### Patch Changes

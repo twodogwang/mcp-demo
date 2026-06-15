@@ -1,6 +1,6 @@
 {
   "name": "@bakarhythm/get-doc-content",
-  "version": "1.2.1",
+  "version": "1.4.0",
   "description": "MCP server for fetching ONES linked document content from URL or requirement hash",
   "main": "dist/src/index.js",
   "bin": {
@@ -9,7 +9,8 @@
   "files": [
     "dist",
     "README.md",
-    ".env.example"
+    ".env.example",
+    "skills/ones-requirement-workflow"
   ],
   "directories": {
     "doc": "docs",

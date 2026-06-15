@@ -168,19 +168,46 @@ describe("SessionManager", () => {
       Referer: "https://ones.example.internal/project/",
       "User-Agent": expect.stringContaining("wxwork/5.0.8"),
     });
-    expect(fetchMock).toHaveBeenNthCalledWith(
-      1,
-      "https://ones.example.internal/identity/api/encryption_cert",
-      expect.objectContaining({ method: "POST" }),
-    );
-    expect(fetchMock).toHaveBeenNthCalledWith(
-      2,
-      "https://ones.example.internal/identity/api/login",
+    const certCall = fetchMock.mock.calls[0];
+    expect(certCall?.[0]).toBe("https://ones.example.internal/identity/api/encryption_cert");
+    expect(certCall?.[1]).toEqual(expect.objectContaining({ method: "POST" }));
+    const certHeaders = new Headers(certCall?.[1]?.headers);
+    expect(certHeaders.get("Origin")).toBe("https://ones.example.internal");
+    expect(certHeaders.get("Referer")).toBe("https://ones.example.internal/project/");
+    expect(certHeaders.get("User-Agent")).toContain("wxwork/5.0.8");
+
+    const loginCall = fetchMock.mock.calls[1];
+    expect(loginCall?.[0]).toBe("https://ones.example.internal/identity/api/login");
+    expect(loginCall?.[1]).toEqual(
       expect.objectContaining({
         method: "POST",
         body: expect.stringContaining("\"email\":\"u@example.com\""),
       }),
     );
+    const loginHeaders = new Headers(loginCall?.[1]?.headers);
+    expect(loginHeaders.get("Content-Type")).toBe("application/json");
+    expect(loginHeaders.get("Origin")).toBe("https://ones.example.internal");
+    expect(loginHeaders.get("Referer")).toBe("https://ones.example.internal/project/");
+    expect(loginHeaders.get("User-Agent")).toContain("wxwork/5.0.8");
+
+    const authorizeCall = fetchMock.mock.calls[2];
+    expect(authorizeCall?.[0]).toBe("https://ones.example.internal/identity/authorize");
+    expect(authorizeCall?.[1]).toEqual(
+      expect.objectContaining({
+        method: "POST",
+      }),
+    );
+    const authorizeHeaders = new Headers(authorizeCall?.[1]?.headers);
+    expect(authorizeHeaders.get("Content-Type")).toBe(
+      "application/x-www-form-urlencoded",
+    );
+    expect(authorizeHeaders.get("Cookie")).toBe("ids-session=abc");
+    expect(authorizeHeaders.get("Origin")).toBe("https://ones.example.internal");
+    expect(authorizeHeaders.get("Referer")).toBe(
+      "https://ones.example.internal/project/",
+    );
+    expect(authorizeHeaders.get("User-Agent")).toContain("wxwork/5.0.8");
+
     const finalizeCall = fetchMock.mock.calls[3];
     expect(finalizeCall?.[0]).toBe(
       "https://ones.example.internal/identity/api/auth_request/finalize",
@@ -196,7 +223,14 @@ describe("SessionManager", () => {
         }),
       }),
     );
-    expect(new Headers(finalizeCall?.[1]?.headers).get("Cookie")).toBe("ids-session=abc");
+    const finalizeHeaders = new Headers(finalizeCall?.[1]?.headers);
+    expect(finalizeHeaders.get("Content-Type")).toBe("application/json");
+    expect(finalizeHeaders.get("Cookie")).toBe("ids-session=abc");
+    expect(finalizeHeaders.get("Origin")).toBe("https://ones.example.internal");
+    expect(finalizeHeaders.get("Referer")).toBe(
+      "https://ones.example.internal/project/",
+    );
+    expect(finalizeHeaders.get("User-Agent")).toContain("wxwork/5.0.8");
 
     const callbackCall = fetchMock.mock.calls[4];
     expect(callbackCall?.[0]).toBe(
@@ -208,7 +242,31 @@ describe("SessionManager", () => {
         redirect: "manual",
       }),
     );
-    expect(new Headers(callbackCall?.[1]?.headers).get("Cookie")).toBe("ids-session=abc");
+    const callbackHeaders = new Headers(callbackCall?.[1]?.headers);
+    expect(callbackHeaders.get("Cookie")).toBe("ids-session=abc");
+    expect(callbackHeaders.get("Origin")).toBe("https://ones.example.internal");
+    expect(callbackHeaders.get("Referer")).toBe(
+      "https://ones.example.internal/project/",
+    );
+    expect(callbackHeaders.get("User-Agent")).toContain("wxwork/5.0.8");
+
+    const tokenCall = fetchMock.mock.calls[5];
+    expect(tokenCall?.[0]).toBe("https://ones.example.internal/identity/oauth/token");
+    expect(tokenCall?.[1]).toEqual(
+      expect.objectContaining({
+        method: "POST",
+      }),
+    );
+    const tokenHeaders = new Headers(tokenCall?.[1]?.headers);
+    expect(tokenHeaders.get("Content-Type")).toBe(
+      "application/x-www-form-urlencoded",
+    );
+    expect(tokenHeaders.get("Cookie")).toBe("ids-session=abc");
+    expect(tokenHeaders.get("Origin")).toBe("https://ones.example.internal");
+    expect(tokenHeaders.get("Referer")).toBe(
+      "https://ones.example.internal/project/",
+    );
+    expect(tokenHeaders.get("User-Agent")).toContain("wxwork/5.0.8");
   });
 
   it("uses authorize code directly when identity flow skips auth request finalize", async () => {
