@@ -22,6 +22,8 @@ export function createJsonToolResult<T extends Record<string, unknown>>(
 function formatToolErrorMessage(error: unknown): string {
   if (error instanceof AppError) {
     switch (error.code) {
+      case "INVALID_INPUT":
+        return error.message;
       case "AUTH_FAILED":
         return "ONES authentication failed. Refresh ONES_AUTH_TOKEN/ONES_COOKIE, or check ONES_USERNAME and ONES_PASSWORD.";
       case "INVALID_DOC_REF":

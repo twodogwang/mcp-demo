@@ -5,6 +5,7 @@ const keys = [
   "ONES_BASE_URL",
   "ONES_USERNAME",
   "ONES_PASSWORD",
+  "ONES_TEAM_ID",
   "ONES_AUTH_TOKEN",
   "ONES_COOKIE",
   "ONES_ORIGIN",
@@ -38,6 +39,7 @@ describe("loadConfig", () => {
     expect(cfg.baseUrl).toBe("https://ones.example.internal");
     expect(cfg.username).toBe("u");
     expect(cfg.password).toBe("p");
+    expect(cfg.defaultTeamId).toBeNull();
     expect("loginPath" in cfg).toBe(false);
     expect("searchPath" in cfg).toBe(false);
     expect("docPathTemplate" in cfg).toBe(false);
@@ -61,6 +63,17 @@ describe("loadConfig", () => {
       referer: null,
       userAgent: "Mozilla/5.0",
     });
+  });
+
+  it("loads default ONES team id when provided", () => {
+    process.env.ONES_BASE_URL = "https://ones.example.internal";
+    process.env.ONES_USERNAME = "u";
+    process.env.ONES_PASSWORD = "p";
+    process.env.ONES_TEAM_ID = " 63FL1oSZ ";
+
+    const cfg = loadConfig();
+
+    expect(cfg.defaultTeamId).toBe("63FL1oSZ");
   });
 
   it("loads browser header overrides for username/password mode", () => {

@@ -36,6 +36,33 @@ describe("SessionManager", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it("derives bearer token from ones-lt cookie for injected external session", async () => {
+    const fetchMock = vi.fn<typeof fetch>();
+    vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
+
+    const sm = new SessionManager({
+      baseUrl: "https://ones.example.internal",
+      username: null,
+      password: null,
+      discovery: {} as any,
+      externalSession: {
+        authToken: null,
+        cookie: "ones-region-uuid=default; ones-lt=token-from-cookie; ones-ids-sid=sid-1",
+        origin: null,
+        referer: null,
+        userAgent: null,
+      },
+    });
+
+    const auth = await sm.getValidAuthHeaders();
+
+    expect(auth).toMatchObject({
+      Authorization: "Bearer token-from-cookie",
+      Cookie: "ones-region-uuid=default; ones-lt=token-from-cookie; ones-ids-sid=sid-1",
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it("performs identity login flow and returns browser-like auth headers", async () => {
     const fetchMock = vi
       .fn<typeof fetch>()
@@ -240,5 +267,94 @@ describe("SessionManager", () => {
       "https://ones.example.internal/project/",
     );
     expect(tokenHeaders.get("User-Agent")).toContain("wxwork/5.0.8");
+  });
+
+  it("uses authorize code directly when identity flow skips auth request finalize", async () => {
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            public_key:
+              "-----BEGIN PUBLIC KEY-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA0nNWWhtl6eBlCet84Hfx\nIbd3qYWKXEoqEyHVDR8obuJWBed7vwJGuIa/E9Meyk/4YnqC7JL+dzBk1ox32ldy\nd/KhaX7uaCJwniqvAuI6/o2Y35BNWXODkfru78wvWTq83afUtSJ7D+gdfE2Uz5uK\nPPonLTrBJh+t3IYFYnvP5JSYZfYOIdOJ2P9UaeyNwrMGCrJIBeBGNP+d6Pm3v0k+\nU7KRBIA8EaNRhaPhcDVxguieIdaUe4f4sKcEwDLqyCUnRqcRuKd48rP20NblfNmM\nYMGhMVszq89lgL0G8hcmszVAuJBMbbB67ptUEtE2gVZ/1BUYWprwBL5nUuI/eWhk\nZwIDAQAB\n-----END PUBLIC KEY-----\n",
+          }),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            org_users: [
+              {
+                org: { org_uuid: "WNY9uYYN", region_uuid: "default" },
+                org_user: { org_user_uuid: "E4d6fw7D", status: 1 },
+              },
+            ],
+          }),
+          {
+            status: 200,
+            headers: {
+              "content-type": "application/json",
+              "set-cookie": "ids-session=abc; Path=/; HttpOnly",
+            },
+          },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(null, {
+          status: 302,
+          headers: {
+            location:
+              "https://ones.example.internal/auth/authorize/callback?code=code-1&state=org_uuid%3DWNY9uYYN",
+          },
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            access_token: "token-1",
+          }),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            user: { email: "u@example.com" },
+          }),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          },
+        ),
+      );
+
+    vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
+
+    const sm = new SessionManager({
+      baseUrl: "https://ones.example.internal",
+      username: "u@example.com",
+      password: "p@ss",
+      discovery: {} as any,
+      externalSession: null,
+    });
+
+    const auth = await sm.getValidAuthHeaders();
+
+    expect(auth).toMatchObject({
+      Authorization: "Bearer token-1",
+      Cookie: "ids-session=abc",
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(5);
+    expect(fetchMock).not.toHaveBeenCalledWith(
+      "https://ones.example.internal/identity/api/auth_request/finalize",
+      expect.anything(),
+    );
   });
 });

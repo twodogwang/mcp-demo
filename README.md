@@ -18,6 +18,7 @@
 - `ONES_BASE_URL`：ONES 内网根地址
 - `ONES_USERNAME`：登录账号，账号密码模式必填
 - `ONES_PASSWORD`：登录密码，账号密码模式必填
+- `ONES_TEAM_ID`：默认 ONES 项目团队 ID；纯 `#12345` 这类工作项编号入口需要，完整 task URL 可从 URL 里解析 team id
 - `ONES_AUTH_TOKEN`：浏览器会话里的 Bearer token，会话复用模式可选但建议提供
 - `ONES_COOKIE`：浏览器会话里的 Cookie，会话复用模式可选但建议提供
 - `ONES_ORIGIN`：请求使用的 Origin，可选，默认回落到 `ONES_BASE_URL`
@@ -158,6 +159,7 @@ ONES_PASSWORD = "your_password_here"
 - `extract_requirement_materials`
 - `get_related_wiki_pages`
 - `get_task_rich_resources`
+- `download_ones_resource`
 
 这些工具都会继续返回可读的 JSON 文本内容，同时也会提供 MCP `structuredContent` 供支持结构化结果的客户端直接消费。
 
@@ -392,6 +394,53 @@ OPENAI_BASE_URL=
 ```json
 {"ref":"#12345","view":"both","include_raw":true,"include_resources":true}
 ```
+
+### 7) 工作项工具
+
+工作项工具用于读取 ONES 需求、任务、bug 和评论事实，服务于需求开发工作流。它们只读，不计算 baseline，也不会自动决定 bug 修复范围。
+
+纯编号入口需要配置 `ONES_TEAM_ID`：
+
+```env
+ONES_TEAM_ID=63FL1oSZ
+```
+
+如果传入完整 task URL，工具会优先使用 URL 里的 team id。
+
+工具列表：
+
+- `resolve_requirement`：把需求号、task id 或 task URL 解析成标准工作项实体
+- `get_requirement_detail`：读取需求正文、字段和关联任务
+- `get_execution_tasks`：读取需求关联的执行任务候选
+- `resolve_bug`：把 bug 号、task id 或 task URL 解析成标准工作项实体
+- `get_bug_detail`：读取 bug 正文、严重级别、优先级和关联任务
+- `get_bug_parent_requirement`：从 bug 的关联任务里反查需求
+- `list_requirement_bugs`：按需列出需求下的 bug
+- `get_task_messages`：读取任务消息或评论
+- `extract_requirement_materials`：从需求任务正文和富文本字段中提取 wiki、外部链接、图片资源和完整性提示
+- `get_related_wiki_pages`：发现需求关联或正文链接到的 ONES wiki 页面
+- `get_task_rich_resources`：提取任务正文里的富文本图片资源
+- `download_ones_resource`：使用当前 MCP 登录态下载 ONES 鉴权资源，返回文件元数据和 base64 内容
+
+示例参数：
+
+```json
+{"ref":"#794"}
+```
+
+```json
+{"task_id":"REQ-794"}
+```
+
+```json
+{"url":"https://ones.example.internal/wiki/api/wiki/editor/team-id/ref-id/resources/mock-image.png"}
+```
+
+说明：
+
+- `get_task_rich_resources` 默认只返回资源元数据和 `src`，不会自动下载文件
+- 如果图片/附件链接需要 ONES 鉴权，调用 `download_ones_resource`，MCP 会复用当前登录态下载
+- 当前下载返回 `content_base64`，是否落盘由调用方自行决定
 
 ## 发布流程
 

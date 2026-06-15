@@ -117,29 +117,9 @@ export class SessionManager {
 
     const orgUser = this.pickOrgUser(loginPayload.org_users ?? []);
     const authorizePath = await this.startAuthorizeFlow(orgUser, codeChallenge);
-    const authRequestId = this.extractAuthRequestId(authorizePath);
-
-    const finalize = await this.requestJson<{ callback_url?: string }>(
-      "/identity/api/auth_request/finalize",
-      {
-        method: "POST",
-        headers: {
-          ...this.buildBrowserHeaders(),
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          auth_request_id: authRequestId,
-          region_uuid: orgUser.org?.region_uuid,
-          org_uuid: orgUser.org?.org_uuid,
-          org_user_uuid: orgUser.org_user?.org_user_uuid,
-        }),
-      },
-    );
-
-    const redirectLocation = await this.followAuthorizeCallback(
-      finalize.callback_url ?? "",
-    );
-    const code = this.extractQueryParam(redirectLocation, "code");
+    const code =
+      this.tryExtractQueryParam(authorizePath, "code") ??
+      await this.exchangeAuthRequestForCode(authorizePath, orgUser);
 
     const token = await this.requestJson<TokenPayload>("/identity/oauth/token", {
       method: "POST",
@@ -174,14 +154,46 @@ export class SessionManager {
     return this.buildAuthenticatedHeaders(accessToken);
   }
 
+  private async exchangeAuthRequestForCode(
+    authorizePath: string,
+    orgUser: OrgUser,
+  ): Promise<string> {
+    const authRequestId = this.extractAuthRequestId(authorizePath);
+
+    const finalize = await this.requestJson<{ callback_url?: string }>(
+      "/identity/api/auth_request/finalize",
+      {
+        method: "POST",
+        headers: {
+          ...this.buildBrowserHeaders(),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          auth_request_id: authRequestId,
+          region_uuid: orgUser.org?.region_uuid,
+          org_uuid: orgUser.org?.org_uuid,
+          org_user_uuid: orgUser.org_user?.org_user_uuid,
+        }),
+      },
+    );
+
+    const redirectLocation = await this.followAuthorizeCallback(
+      finalize.callback_url ?? "",
+    );
+
+    return this.extractQueryParam(redirectLocation, "code");
+  }
+
   private buildExternalSessionHeaders(
     externalSession: ExternalSessionConfig,
   ): Record<string, string> {
     const headers = this.buildBrowserHeaders();
+    const authToken =
+      externalSession.authToken ?? this.extractCookieValue(externalSession.cookie, "ones-lt");
 
-    if (externalSession.authToken) {
+    if (authToken) {
       headers.Authorization = this.formatAuthorizationHeader(
-        externalSession.authToken,
+        authToken,
       );
     }
 
@@ -190,6 +202,26 @@ export class SessionManager {
     }
 
     return headers;
+  }
+
+  private extractCookieValue(cookie: string | null, name: string): string | null {
+    if (!cookie) {
+      return null;
+    }
+
+    for (const segment of cookie.split(";")) {
+      const separator = segment.indexOf("=");
+      if (separator <= 0) {
+        continue;
+      }
+
+      const key = segment.slice(0, separator).trim();
+      if (key === name) {
+        return segment.slice(separator + 1).trim() || null;
+      }
+    }
+
+    return null;
   }
 
   private formatAuthorizationHeader(token: string): string {
@@ -324,9 +356,13 @@ export class SessionManager {
     return this.extractQueryParam(location, "id");
   }
 
-  private extractQueryParam(input: string, key: string): string {
+  private tryExtractQueryParam(input: string, key: string): string | null {
     const url = new URL(this.toAbsoluteUrl(input));
-    const value = url.searchParams.get(key);
+    return url.searchParams.get(key);
+  }
+
+  private extractQueryParam(input: string, key: string): string {
+    const value = this.tryExtractQueryParam(input, key);
     if (!value) {
       throw new AppError("AUTH_FAILED", `ONES redirect missing ${key}`);
     }

@@ -14,7 +14,19 @@ import { isCliEntrypoint } from "../src/index";
 import { createMcpServer } from "../src/server/create-mcp-server";
 import { parseGetDocInput } from "../src/schemas/get-doc";
 import type { Runtime } from "../src/services/runtime";
-import type { RequirementDetailResult } from "../src/work-items/model";
+import type {
+  BugDetailResult,
+  BugParentRequirementResult,
+  DownloadedResourceResult,
+  ExecutionTasksResult,
+  RequirementBugsResult,
+  RequirementDetailResult,
+  RequirementMaterialsResult,
+  ResolveTaskResult,
+  RelatedWikiPagesResult,
+  TaskMessagesResult,
+  TaskRichResourcesResult,
+} from "../src/work-items/model";
 
 const keys = [
   "ONES_BASE_URL",
@@ -26,6 +38,7 @@ const baseConfig: AppConfig = {
   baseUrl: "https://ones.example.internal",
   username: "demo",
   password: "secret",
+  defaultTeamId: "team-1",
   timeoutMs: 5000,
   maxContentChars: 20000,
   ocr: {
@@ -50,6 +63,26 @@ function createRuntime(overrides?: {
   getDocChunksByParsedRef?: Runtime["client"]["getDocChunksByParsedRef"];
   getDocContextByParsedRef?: Runtime["client"]["getDocContextByParsedRef"];
   getRequirementDetailByRef?: Runtime["client"]["getRequirementDetailByRef"];
+  getExecutionTasksByRef?: Runtime["client"]["getExecutionTasksByRef"];
+  extractRequirementMaterialsByRef?: Runtime["client"]["extractRequirementMaterialsByRef"];
+  listRequirementBugsByRef?: Runtime["client"]["listRequirementBugsByRef"];
+  getTaskMessagesByRef?: Runtime["client"]["getTaskMessagesByRef"];
+  getRelatedWikiPagesByRef?: Runtime["client"]["getRelatedWikiPagesByRef"];
+  getTaskRichResourcesByRef?: Runtime["client"]["getTaskRichResourcesByRef"];
+  getBugDetailByRef?: Runtime["client"]["getBugDetailByRef"];
+  getBugParentRequirementByRef?: Runtime["client"]["getBugParentRequirementByRef"];
+  resolveRequirement?: Runtime["client"]["resolveRequirement"];
+  getRequirementDetail?: Runtime["client"]["getRequirementDetail"];
+  getExecutionTasks?: Runtime["client"]["getExecutionTasks"];
+  resolveBug?: Runtime["client"]["resolveBug"];
+  getBugDetail?: Runtime["client"]["getBugDetail"];
+  getBugParentRequirement?: Runtime["client"]["getBugParentRequirement"];
+  listRequirementBugs?: Runtime["client"]["listRequirementBugs"];
+  getTaskMessages?: Runtime["client"]["getTaskMessages"];
+  extractRequirementMaterials?: Runtime["client"]["extractRequirementMaterials"];
+  getRelatedWikiPages?: Runtime["client"]["getRelatedWikiPages"];
+  getTaskRichResources?: Runtime["client"]["getTaskRichResources"];
+  downloadResource?: Runtime["client"]["downloadResource"];
 }): Runtime {
   const fallbackDoc: DocDetail = {
     doc: {
@@ -111,6 +144,158 @@ function createRuntime(overrides?: {
     truncated: false,
     context: fallbackDoc.llm_view!,
   };
+  const fallbackRequirementEntity = {
+    entity_type: "requirement" as const,
+    task_id: "REQ-1",
+    number: 794,
+    summary: "需求 794",
+    task_type: { id: "15eiaFu6", name: "需求" },
+    status: { id: "status-1", name: "进行中" },
+    owner: null,
+    assignee: null,
+    team: { id: "team-1", name: null },
+    parent_task_id: null,
+    url: "https://ones.example.internal/project/#/team/team-1/task/REQ-1",
+    updated_at: undefined,
+  };
+  const fallbackBugEntity = {
+    entity_type: "bug" as const,
+    task_id: "BUG-1",
+    number: 127599,
+    summary: "Bug 127599",
+    task_type: { id: "2eUNAjCL", name: "缺陷" },
+    status: { id: "status-2", name: "待处理" },
+    owner: null,
+    assignee: null,
+    team: { id: "team-1", name: null },
+    parent_task_id: "REQ-1",
+    url: "https://ones.example.internal/project/#/team/team-1/task/BUG-1",
+    updated_at: undefined,
+  };
+  const fallbackResolveRequirement: ResolveTaskResult = {
+    input: "#794",
+    matched: true,
+    entity: fallbackRequirementEntity,
+    candidates: [],
+    resolution_path: [{ step: "normalize_input", value: "#794" }],
+    raw_payload: {},
+  };
+  const fallbackRequirementDetail: RequirementDetailResult = {
+    entity: fallbackRequirementEntity,
+    description: {
+      plain_text: "需求正文",
+      html: "<p>需求正文</p>",
+      rich_text: null,
+    },
+    custom_fields: [],
+    related_tasks: [],
+    raw_payload: {},
+  };
+  const fallbackExecutionTasks: ExecutionTasksResult = {
+    requirement: fallbackRequirementEntity,
+    execution_tasks: [],
+    raw_payload: {},
+  };
+  const fallbackResolveBug: ResolveTaskResult = {
+    input: "#127599",
+    matched: true,
+    entity: fallbackBugEntity,
+    candidates: [],
+    resolution_path: [{ step: "normalize_input", value: "#127599" }],
+    raw_payload: {},
+  };
+  const fallbackBugDetail: BugDetailResult = {
+    entity: fallbackBugEntity,
+    description: {
+      plain_text: "Bug 描述",
+      html: "<p>Bug 描述</p>",
+      rich_text: null,
+    },
+    severity: null,
+    priority: null,
+    related_tasks: [],
+    raw_payload: {},
+  };
+  const fallbackBugParentRequirement: BugParentRequirementResult = {
+    bug: fallbackBugEntity,
+    requirement: fallbackRequirementEntity,
+    resolution_path: [],
+    raw_payload: {},
+  };
+  const fallbackRequirementBugs: RequirementBugsResult = {
+    requirement: fallbackRequirementEntity,
+    bugs: [fallbackBugEntity],
+    count: 1,
+    raw_payload: {},
+  };
+  const fallbackTaskMessages: TaskMessagesResult = {
+    entity: fallbackRequirementEntity,
+    messages: [],
+    raw_payload: {},
+  };
+  const fallbackRequirementMaterials: RequirementMaterialsResult = {
+    requirement: fallbackRequirementEntity,
+    wiki_pages: [
+      {
+        page_id: "PAGE-1",
+        team_id: "team-1",
+        title: "需求 PRD",
+        url: "https://ones.example.internal/wiki#/team/team-1/page/PAGE-1",
+        source: "related_wiki_pages",
+        error: null,
+      },
+    ],
+    external_links: [
+      {
+        url: "http://giga.usaxure.com/APJR4D?g=4",
+        kind: "prototype",
+        source: "field_values.field016",
+      },
+    ],
+    rich_resources: [
+      {
+        type: "image",
+        resource_id: "IMG-1",
+        src: "https://ones.example.internal/image.png",
+        mime_type: "image/png",
+        alt: null,
+        ref_id: "REQ-1",
+        ref_type: "task",
+        source: "field_values.field016",
+      },
+    ],
+    completeness: {
+      has_requirement_body: true,
+      has_related_wiki_pages: true,
+      has_external_links: true,
+      has_rich_resources: true,
+      missing: [],
+      next_actions: [
+        "fetch_related_wiki_pages",
+        "review_external_links",
+        "persist_or_review_rich_resources",
+        "fetch_task_messages_if_needed",
+      ],
+    },
+    raw_payload: {},
+  };
+  const fallbackRelatedWikiPages: RelatedWikiPagesResult = {
+    requirement: fallbackRequirementEntity,
+    wiki_pages: fallbackRequirementMaterials.wiki_pages,
+    raw_payload: {},
+  };
+  const fallbackTaskRichResources: TaskRichResourcesResult = {
+    entity: fallbackRequirementEntity,
+    resources: fallbackRequirementMaterials.rich_resources,
+    raw_payload: {},
+  };
+  const fallbackDownloadedResource: DownloadedResourceResult = {
+    url: "https://ones.example.internal/wiki/api/wiki/editor/team-1/ref-1/resources/IMG-1.png",
+    filename: "IMG-1.png",
+    mime_type: "image/png",
+    size_bytes: 4,
+    content_base64: "dGVzdA==",
+  };
 
   return {
     cfg: baseConfig,
@@ -139,7 +324,60 @@ function createRuntime(overrides?: {
       getDocContextByParsedRef:
         overrides?.getDocContextByParsedRef ?? vi.fn().mockResolvedValue(fallbackContext),
       getRequirementDetailByRef:
-        overrides?.getRequirementDetailByRef ?? vi.fn(),
+        overrides?.getRequirementDetailByRef ??
+        vi.fn().mockResolvedValue(fallbackRequirementDetail),
+      getExecutionTasksByRef:
+        overrides?.getExecutionTasksByRef ??
+        vi.fn().mockResolvedValue(fallbackExecutionTasks),
+      extractRequirementMaterialsByRef:
+        overrides?.extractRequirementMaterialsByRef ??
+        vi.fn().mockResolvedValue(fallbackRequirementMaterials),
+      listRequirementBugsByRef:
+        overrides?.listRequirementBugsByRef ??
+        vi.fn().mockResolvedValue(fallbackRequirementBugs),
+      getTaskMessagesByRef:
+        overrides?.getTaskMessagesByRef ??
+        vi.fn().mockResolvedValue(fallbackTaskMessages),
+      getRelatedWikiPagesByRef:
+        overrides?.getRelatedWikiPagesByRef ??
+        vi.fn().mockResolvedValue(fallbackRelatedWikiPages),
+      getTaskRichResourcesByRef:
+        overrides?.getTaskRichResourcesByRef ??
+        vi.fn().mockResolvedValue(fallbackTaskRichResources),
+      getBugDetailByRef:
+        overrides?.getBugDetailByRef ?? vi.fn().mockResolvedValue(fallbackBugDetail),
+      getBugParentRequirementByRef:
+        overrides?.getBugParentRequirementByRef ??
+        vi.fn().mockResolvedValue(fallbackBugParentRequirement),
+      resolveRequirement:
+        overrides?.resolveRequirement ?? vi.fn().mockResolvedValue(fallbackResolveRequirement),
+      getRequirementDetail:
+        overrides?.getRequirementDetail ?? vi.fn().mockResolvedValue(fallbackRequirementDetail),
+      getExecutionTasks:
+        overrides?.getExecutionTasks ?? vi.fn().mockResolvedValue(fallbackExecutionTasks),
+      resolveBug:
+        overrides?.resolveBug ?? vi.fn().mockResolvedValue(fallbackResolveBug),
+      getBugDetail:
+        overrides?.getBugDetail ?? vi.fn().mockResolvedValue(fallbackBugDetail),
+      getBugParentRequirement:
+        overrides?.getBugParentRequirement ??
+        vi.fn().mockResolvedValue(fallbackBugParentRequirement),
+      listRequirementBugs:
+        overrides?.listRequirementBugs ?? vi.fn().mockResolvedValue(fallbackRequirementBugs),
+      getTaskMessages:
+        overrides?.getTaskMessages ?? vi.fn().mockResolvedValue(fallbackTaskMessages),
+      extractRequirementMaterials:
+        overrides?.extractRequirementMaterials ??
+        vi.fn().mockResolvedValue(fallbackRequirementMaterials),
+      getRelatedWikiPages:
+        overrides?.getRelatedWikiPages ??
+        vi.fn().mockResolvedValue(fallbackRelatedWikiPages),
+      getTaskRichResources:
+        overrides?.getTaskRichResources ??
+        vi.fn().mockResolvedValue(fallbackTaskRichResources),
+      downloadResource:
+        overrides?.downloadResource ??
+        vi.fn().mockResolvedValue(fallbackDownloadedResource),
     } as Runtime["client"],
   };
 }
@@ -199,6 +437,7 @@ describe("mcp tools", () => {
         "extract_requirement_materials",
         "get_related_wiki_pages",
         "get_task_rich_resources",
+        "download_ones_resource",
       ]);
 
       const searchDocs = tools.tools.find((tool) => tool.name === "search_docs");
@@ -209,6 +448,18 @@ describe("mcp tools", () => {
       const getDocContext = tools.tools.find((tool) => tool.name === "get_doc_context");
       const getRequirementDetailByRef = tools.tools.find(
         (tool) => tool.name === "get_requirement_detail_by_ref",
+      );
+      const resolveRequirement = tools.tools.find(
+        (tool) => tool.name === "resolve_requirement",
+      );
+      const getRequirementDetail = tools.tools.find(
+        (tool) => tool.name === "get_requirement_detail",
+      );
+      const listRequirementBugs = tools.tools.find(
+        (tool) => tool.name === "list_requirement_bugs",
+      );
+      const downloadOnesResource = tools.tools.find(
+        (tool) => tool.name === "download_ones_resource",
       );
 
       expect(searchDocs?.annotations).toMatchObject({
@@ -231,6 +482,17 @@ describe("mcp tools", () => {
       expect(getDocContext?.outputSchema?.properties).toHaveProperty("strategy");
       expect(getRequirementDetailByRef?.inputSchema?.properties).toHaveProperty("ref");
       expect(getRequirementDetailByRef?.outputSchema?.properties).toHaveProperty("entity");
+      expect(resolveRequirement?.annotations).toMatchObject({
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: true,
+      });
+      expect(resolveRequirement?.outputSchema?.properties).toHaveProperty("entity");
+      expect(getRequirementDetail?.outputSchema?.properties).toHaveProperty("description");
+      expect(listRequirementBugs?.outputSchema?.properties).toHaveProperty("bugs");
+      expect(downloadOnesResource?.inputSchema?.properties).toHaveProperty("url");
+      expect(downloadOnesResource?.outputSchema?.properties).toHaveProperty("content_base64");
     } finally {
       await server.close();
       await client.close();
@@ -448,47 +710,262 @@ describe("mcp tools", () => {
     }
   });
 
-  it("returns structuredContent for get_requirement_detail_by_ref", async () => {
-    const detail: RequirementDetailResult = {
+  it("returns structuredContent for all work-item tools", async () => {
+    const resolveRequirement = vi.fn().mockResolvedValue({
+      input: "#794",
+      matched: true,
       entity: {
         entity_type: "requirement",
-        task_id: "REQ-1",
+        task_id: "REQ-794",
         number: 794,
-        summary: "提现需求",
-        task_type: { id: "requirement", name: "需求" },
+        summary: "管理后台需求",
+        task_type: { id: "15eiaFu6", name: "需求" },
+        status: { id: "status-1", name: "进行中" },
+        owner: null,
+        assignee: null,
+        team: { id: "63FL1oSZ", name: null },
+        parent_task_id: null,
+        url: "https://ones.example.internal/project/#/team/63FL1oSZ/task/REQ-794",
+        updated_at: undefined,
+      },
+      candidates: [],
+      resolution_path: [{ step: "normalize_input", value: "#794" }],
+      raw_payload: {},
+    } satisfies ResolveTaskResult);
+    const getRequirementDetail = vi.fn().mockResolvedValue({
+      entity: {
+        entity_type: "requirement",
+        task_id: "REQ-794",
+        number: 794,
+        summary: "管理后台需求",
+        task_type: { id: "15eiaFu6", name: "需求" },
         status: null,
         owner: null,
         assignee: null,
-        team: { id: "TEAM-1", name: "团队" },
+        team: { id: "63FL1oSZ", name: null },
         parent_task_id: null,
         url: null,
       },
-      description: {
-        plain_text: "需求正文",
-        html: "<p>需求正文</p>",
-        rich_text: null,
-      },
+      description: { plain_text: "需求正文", html: "<p>需求正文</p>", rich_text: null },
       custom_fields: [],
       related_tasks: [],
-      raw_payload: { uuid: "REQ-1" },
-    };
-    const getRequirementDetailByRef = vi.fn().mockResolvedValue(detail);
-    const runtime = createRuntime({ getRequirementDetailByRef });
+      raw_payload: {},
+    } satisfies RequirementDetailResult);
+    const getExecutionTasks = vi.fn().mockResolvedValue({
+      requirement: (await getRequirementDetail()).entity,
+      execution_tasks: [],
+      raw_payload: {},
+    } satisfies ExecutionTasksResult);
+    const resolveBug = vi.fn().mockResolvedValue({
+      input: "#127599",
+      matched: true,
+      entity: {
+        entity_type: "bug",
+        task_id: "BUG-1",
+        number: 127599,
+        summary: "Bug",
+        task_type: { id: "2eUNAjCL", name: "缺陷" },
+        status: null,
+        owner: null,
+        assignee: null,
+        team: { id: "63FL1oSZ", name: null },
+        parent_task_id: null,
+        url: null,
+      },
+      candidates: [],
+      resolution_path: [],
+      raw_payload: {},
+    } satisfies ResolveTaskResult);
+    const getBugDetail = vi.fn().mockResolvedValue({
+      entity: (await resolveBug()).entity!,
+      description: { plain_text: "Bug 描述", html: "<p>Bug 描述</p>", rich_text: null },
+      severity: null,
+      priority: null,
+      related_tasks: [],
+      raw_payload: {},
+    } satisfies BugDetailResult);
+    const getBugParentRequirement = vi.fn().mockResolvedValue({
+      bug: (await resolveBug()).entity!,
+      requirement: (await getRequirementDetail()).entity,
+      resolution_path: [],
+      raw_payload: {},
+    } satisfies BugParentRequirementResult);
+    const listRequirementBugs = vi.fn().mockResolvedValue({
+      requirement: (await getRequirementDetail()).entity,
+      bugs: [(await resolveBug()).entity!],
+      count: 1,
+      raw_payload: {},
+    } satisfies RequirementBugsResult);
+    const getTaskMessages = vi.fn().mockResolvedValue({
+      entity: (await getRequirementDetail()).entity,
+      messages: [],
+      raw_payload: {},
+    } satisfies TaskMessagesResult);
+    const wikiPages = [
+      {
+        page_id: "PAGE-1",
+        team_id: "team-1",
+        title: "需求 PRD",
+        url: "https://ones.example.internal/wiki#/team/team-1/page/PAGE-1",
+        source: "related_wiki_pages",
+        error: null,
+      },
+    ];
+    const extractRequirementMaterials = vi.fn().mockResolvedValue({
+      requirement: (await getRequirementDetail()).entity,
+      wiki_pages: wikiPages,
+      external_links: [],
+      rich_resources: [],
+      completeness: {
+        has_requirement_body: true,
+        has_related_wiki_pages: true,
+        has_external_links: false,
+        has_rich_resources: false,
+        missing: [],
+        next_actions: ["fetch_related_wiki_pages", "fetch_task_messages_if_needed"],
+      },
+      raw_payload: {},
+    } satisfies RequirementMaterialsResult);
+    const getRelatedWikiPages = vi.fn().mockResolvedValue({
+      requirement: (await getRequirementDetail()).entity,
+      wiki_pages: wikiPages,
+      raw_payload: {},
+    } satisfies RelatedWikiPagesResult);
+    const getTaskRichResources = vi.fn().mockResolvedValue({
+      entity: (await getRequirementDetail()).entity,
+      resources: [],
+      raw_payload: {},
+    } satisfies TaskRichResourcesResult);
+    const downloadResource = vi.fn().mockResolvedValue({
+      url: "https://ones.example.internal/wiki/api/wiki/editor/team-1/ref-1/resources/IMG-1.png",
+      filename: "IMG-1.png",
+      mime_type: "image/png",
+      size_bytes: 4,
+      content_base64: "dGVzdA==",
+    } satisfies DownloadedResourceResult);
+    const runtime = createRuntime({
+      resolveRequirement,
+      getRequirementDetail,
+      getExecutionTasks,
+      resolveBug,
+      getBugDetail,
+      getBugParentRequirement,
+      listRequirementBugs,
+      getTaskMessages,
+      extractRequirementMaterials,
+      getRelatedWikiPages,
+      getTaskRichResources,
+      downloadResource,
+    });
     const { client, server } = await connectTestClient(runtime);
 
     try {
-      const result = await client.callTool({
+      const resolveRequirementResult = await client.callTool({
+        name: "resolve_requirement",
+        arguments: { ref: "#794" },
+      });
+      const requirementDetailByRefResult = await client.callTool({
         name: "get_requirement_detail_by_ref",
         arguments: { ref: "#794" },
       });
 
-      if (!("content" in result)) {
+      if (!("content" in resolveRequirementResult)) {
         throw new Error("expected CallToolResult");
       }
 
-      expect(result.isError).toBeUndefined();
-      expect(getRequirementDetailByRef).toHaveBeenCalledWith("#794");
-      expect(result.structuredContent).toEqual(detail);
+      expect(resolveRequirement).toHaveBeenCalledWith("#794");
+      expect(resolveRequirementResult.isError).toBeUndefined();
+      expect(resolveRequirementResult.structuredContent).toMatchObject({
+        matched: true,
+        entity: {
+          entity_type: "requirement",
+          task_id: "REQ-794",
+          number: 794,
+        },
+      });
+      expect(requirementDetailByRefResult.structuredContent).toMatchObject({
+        entity: {
+          entity_type: "requirement",
+          task_id: "REQ-1",
+          number: 794,
+        },
+      });
+      await client.callTool({
+        name: "get_requirement_detail",
+        arguments: { task_id: "REQ-794" },
+      });
+      await client.callTool({
+        name: "get_execution_tasks",
+        arguments: { task_id: "REQ-794" },
+      });
+      await client.callTool({
+        name: "resolve_bug",
+        arguments: { ref: "#127599" },
+      });
+      await client.callTool({
+        name: "get_bug_detail",
+        arguments: { task_id: "BUG-1" },
+      });
+      await client.callTool({
+        name: "get_bug_parent_requirement",
+        arguments: { task_id: "BUG-1" },
+      });
+      const listBugsResult = await client.callTool({
+        name: "list_requirement_bugs",
+        arguments: { task_id: "REQ-794" },
+      });
+      await client.callTool({
+        name: "get_task_messages",
+        arguments: { task_id: "REQ-794" },
+      });
+      const materialsResult = await client.callTool({
+        name: "extract_requirement_materials",
+        arguments: { task_id: "REQ-794" },
+      });
+      await client.callTool({
+        name: "get_related_wiki_pages",
+        arguments: { task_id: "REQ-794" },
+      });
+      await client.callTool({
+        name: "get_task_rich_resources",
+        arguments: { task_id: "REQ-794" },
+      });
+      const downloadResult = await client.callTool({
+        name: "download_ones_resource",
+        arguments: {
+          url: "https://ones.example.internal/wiki/api/wiki/editor/team-1/ref-1/resources/IMG-1.png",
+        },
+      });
+
+      expect(getRequirementDetail).toHaveBeenCalledWith("REQ-794", undefined);
+      expect(getExecutionTasks).toHaveBeenCalledWith("REQ-794", undefined);
+      expect(resolveBug).toHaveBeenCalledWith("#127599");
+      expect(getBugDetail).toHaveBeenCalledWith("BUG-1", undefined);
+      expect(getBugParentRequirement).toHaveBeenCalledWith("BUG-1", undefined);
+      expect(listRequirementBugs).toHaveBeenCalledWith("REQ-794", undefined);
+      expect(getTaskMessages).toHaveBeenCalledWith("REQ-794", undefined);
+      expect(extractRequirementMaterials).toHaveBeenCalledWith("REQ-794", undefined);
+      expect(getRelatedWikiPages).toHaveBeenCalledWith("REQ-794", undefined);
+      expect(getTaskRichResources).toHaveBeenCalledWith("REQ-794", undefined);
+      expect(downloadResource).toHaveBeenCalledWith(
+        "https://ones.example.internal/wiki/api/wiki/editor/team-1/ref-1/resources/IMG-1.png",
+      );
+      expect(listBugsResult.structuredContent).toMatchObject({
+        count: 1,
+        bugs: [{ entity_type: "bug", task_id: "BUG-1" }],
+      });
+      expect(materialsResult.structuredContent).toMatchObject({
+        wiki_pages: [{ page_id: "PAGE-1" }],
+        completeness: {
+          has_requirement_body: true,
+          has_related_wiki_pages: true,
+        },
+      });
+      expect(downloadResult.structuredContent).toMatchObject({
+        filename: "IMG-1.png",
+        mime_type: "image/png",
+        content_base64: "dGVzdA==",
+      });
     } finally {
       await server.close();
       await client.close();

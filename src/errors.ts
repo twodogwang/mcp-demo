@@ -1,4 +1,5 @@
 export type ErrorCode =
+  | "INVALID_INPUT"
   | "AUTH_FAILED"
   | "NOT_FOUND"
   | "UPSTREAM_ERROR"

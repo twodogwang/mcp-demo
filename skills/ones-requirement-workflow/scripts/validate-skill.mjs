@@ -46,6 +46,7 @@ assertIncludes(frontmatter, "description:", "skill description");
   "list_requirement_bugs_by_ref",
   "get_bug_detail_by_ref",
   "get_bug_parent_requirement_by_ref",
+  "download_ones_resource",
   "analysis/feature-scenarios.md",
   "Figma MCP",
   "visual/references/<feature-key>/<scenario-key>",
@@ -106,7 +107,8 @@ if (!hasHumanGateEval) {
 
 const hasFigmaMcpEval = evals.evals.some((item) =>
   item.expectations.some((expectation) =>
-    expectation.includes("Figma MCP") && expectation.includes("node"),
+    expectation.includes("Figma MCP") &&
+    expectation.includes("node"),
   ),
 );
 

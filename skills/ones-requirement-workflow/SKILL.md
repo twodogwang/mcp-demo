@@ -437,6 +437,7 @@ Compatibility and debugging tools:
 - `extract_requirement_materials`
 - `get_related_wiki_pages`
 - `get_task_rich_resources`
+- `download_ones_resource`
 
 Use compatibility/debugging tools only when a task id is already known, a `*_by_ref` lookup returns ambiguous candidates, or the workflow needs to isolate whether number resolution or detail loading failed.
 

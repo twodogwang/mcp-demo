@@ -31,6 +31,7 @@ import type {
   BugDetailResult,
   BugParentRequirementResult,
   CustomField,
+  DownloadedResourceResult,
   ExecutionTasksResult,
   RequirementBugsResult,
   RequirementDetailResult,
@@ -80,6 +81,12 @@ type LoadedDocument = {
   doc: DocMetadata;
   raw: string;
   parsed: ParsedDocument;
+};
+
+type ParsedTaskUrl = {
+  teamId: string;
+  taskId?: string;
+  displayIdPath?: string;
 };
 
 const DEFAULT_GET_DOC_OPTIONS: GetDocOptions = {
@@ -443,6 +450,20 @@ export class OnesClient {
     return this.getTaskRichResources(entity.task_id, entity.team?.id ?? undefined);
   }
 
+  async downloadResource(url: string): Promise<DownloadedResourceResult> {
+    const normalizedUrl = this.normalizeDownloadUrl(url);
+    const response = await this.requestResponse(normalizedUrl, { method: "GET" }, true, true);
+    const bytes = new Uint8Array(await response.arrayBuffer());
+
+    return {
+      url: normalizedUrl,
+      filename: this.extractFilename(response, normalizedUrl),
+      mime_type: response.headers.get("content-type"),
+      size_bytes: this.extractResponseSize(response, bytes.byteLength),
+      content_base64: Buffer.from(bytes).toString("base64"),
+    };
+  }
+
   private collectMaterialTextSources(
     raw: Record<string, unknown>,
   ): Array<{ source: string; text: string }> {
@@ -799,9 +820,24 @@ export class OnesClient {
     const taskUrl = this.parseTaskUrl(input);
 
     if (taskUrl) {
-      const raw = await this.loadTaskInfo(taskUrl.taskId, taskUrl.teamId);
+      const taskId =
+        taskUrl.taskId ??
+        (taskUrl.displayIdPath
+          ? await this.resolveTaskIdByDisplayIdPath(
+              taskUrl.displayIdPath,
+              taskUrl.teamId,
+            )
+          : null);
+      if (!taskId) {
+        throw new AppError("INVALID_DOC_REF", "Invalid ONES task ref");
+      }
+
+      const raw = await this.loadTaskInfo(taskId, taskUrl.teamId);
       const entity = this.normalizeTaskEntity(raw, expectedType, taskUrl.teamId);
-      resolutionPath.push({ step: "parse_task_url", value: taskUrl.taskId });
+      resolutionPath.push({
+        step: taskUrl.taskId ? "parse_task_url" : "resolve_display_id_path",
+        value: taskUrl.taskId ?? taskUrl.displayIdPath ?? taskId,
+      });
       return {
         input,
         matched: true,
@@ -870,7 +906,7 @@ export class OnesClient {
     return resolved.entity;
   }
 
-  private parseTaskUrl(ref: string): { teamId: string; taskId: string } | null {
+  private parseTaskUrl(ref: string): ParsedTaskUrl | null {
     if (!/^https?:\/\//i.test(ref)) {
       return null;
     }
@@ -881,14 +917,24 @@ export class OnesClient {
       /\/(?:workspace\/)?team\/([^/?#]+)\/(?:[^/?#&]+\/)*task\/([^/?#&]+)/,
     );
 
-    if (!match?.[1] || !match[2]) {
-      return null;
+    if (match?.[1] && match[2]) {
+      return {
+        teamId: decodeURIComponent(match[1]),
+        taskId: decodeURIComponent(match[2]),
+      };
     }
 
-    return {
-      teamId: decodeURIComponent(match[1]),
-      taskId: decodeURIComponent(match[2]),
-    };
+    const issueMatch = text.match(
+      /\/(?:workspace\/)?team\/([^/?#]+)\/(?:[^/?#&]+\/)*(?:issue|workitem)\/([^/?#&]+)/,
+    );
+    if (issueMatch?.[1] && issueMatch[2]) {
+      return {
+        teamId: decodeURIComponent(issueMatch[1]),
+        displayIdPath: decodeURIComponent(issueMatch[2]),
+      };
+    }
+
+    return null;
   }
 
   private async searchTaskByNumber(
@@ -941,10 +987,144 @@ export class OnesClient {
     teamId?: string,
   ): Promise<Record<string, unknown>> {
     const resolvedTeamId = this.requireTeamId(teamId);
-    return this.requestJson<Record<string, unknown>>(
-      `/project/api/project/team/${encodeURIComponent(resolvedTeamId)}/task/${encodeURIComponent(taskId)}/info`,
-      { method: "GET" },
+    try {
+      return await this.loadOnesProjectTaskInfo(taskId, resolvedTeamId);
+    } catch (error) {
+      return this.requestJson<Record<string, unknown>>(
+        `/project/api/project/team/${encodeURIComponent(resolvedTeamId)}/task/${encodeURIComponent(taskId)}/info`,
+        { method: "GET" },
+      );
+    }
+  }
+
+  private async resolveTaskIdByDisplayIdPath(
+    displayIdPath: string,
+    teamId: string,
+  ): Promise<string | null> {
+    const data = await this.requestJson<Record<string, unknown>>(
+      `/project/api/ones-project/team/${encodeURIComponent(teamId)}/tasks/identifier`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json;charset=UTF-8" },
+        body: JSON.stringify({ display_id_path: displayIdPath }),
+      },
     );
+
+    return this.pickString(data, ["task_uuid", "uuid", "path", "taskId", "task_id"]);
+  }
+
+  private async loadOnesProjectTaskInfo(
+    taskId: string,
+    teamId: string,
+  ): Promise<Record<string, unknown>> {
+    const data = await this.requestJson<Record<string, unknown>>(
+      `/project/api/ones-project/team/${encodeURIComponent(teamId)}/workitems/onesql`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json;charset=UTF-8" },
+        body: JSON.stringify({
+          query: this.buildOnesProjectTaskInfoQuery(taskId),
+        }),
+      },
+    );
+    const item = this.extractFirstOnesqlItem(data);
+    if (!item) {
+      throw new AppError("NOT_FOUND", "ONES resource not found", 404);
+    }
+
+    return this.normalizeOnesProjectTaskInfo(item, teamId);
+  }
+
+  private buildOnesProjectTaskInfoQuery(taskId: string): string {
+    const escapedTaskId = taskId.replace(/'/g, "\\'");
+    return [
+      "select uid(",
+      "field001,field006.uuid,field006.name,field006.icon,field006.isArchive,",
+      "field903,field004.uuid,field004.name,field004.email,field004.avatar,",
+      "field005.uuid,field005.name,field005.category,",
+      "field007.uuid,field007.name,field007.detail_type,",
+      "field012.uuid,field012.name,field011.uuid,field011.name,field011.status_category,field011.title,",
+      "field016,field031.uuid,field031.name,field029.uuid,field029.name,",
+      "LXh61ReU.uuid,LXh61ReU.name,field041.uuid,field041.name,field038.uuid,field038.name,",
+      "toDate(field013),field030.uuid,field030.name,field037,field039.uuid,field039.name,",
+      "field040.uuid,field040.name,field040.email,field040.avatar,FZtdoCJW,Dz5Goe89,",
+      "field007.icon,field007.icon_uuid,field007.built_in,field007.type,",
+      "field003.uuid,field003.name,field003.email,field003.avatar,field009,field010,",
+      "field008.uuid,field008.name,field008.email,field008.avatar,v$issue_path",
+      `) from issue where uid(uuid) = uid('${escapedTaskId}');`,
+    ].join("");
+  }
+
+  private extractFirstOnesqlItem(data: Record<string, unknown>): Record<string, unknown> | null {
+    const rows = this.pickArrayField(data, ["data", "items", "list"]);
+    const first = rows[0];
+    if (!first) {
+      return null;
+    }
+
+    const item = first.item;
+    if (item && typeof item === "object") {
+      return item as Record<string, unknown>;
+    }
+
+    return first;
+  }
+
+  private normalizeOnesProjectTaskInfo(
+    item: Record<string, unknown>,
+    teamId: string,
+  ): Record<string, unknown> {
+    const issueType = this.normalizeOnesProjectFieldRef(item.field007);
+    const status = this.normalizeOnesProjectFieldRef(item.field005);
+    const assignee = this.normalizeOnesProjectUser(item.field004);
+    const owner = this.normalizeOnesProjectUser(item.field003);
+    const project = this.normalizeOnesProjectFieldRef(item.field006);
+    const issuePath = this.pickArrayField(item, ["v$issue_path"]);
+    const firstPath = issuePath[0] ?? {};
+    const taskId =
+      this.pickString(item, ["uuid"]) ??
+      this.pickString(firstPath, ["uuid"]) ??
+      "";
+    const displayId =
+      this.pickString(item, ["field903", "display_id_path"]) ??
+      this.pickString(firstPath, ["display_id"]);
+    const numberRaw =
+      firstPath.number ??
+      (displayId ? Number(displayId.match(/(\d+)$/)?.[1]) : undefined);
+
+    return {
+      uuid: taskId,
+      number: typeof numberRaw === "number" ? numberRaw : undefined,
+      summary: this.pickString(item, ["field001"]) ?? this.pickString(firstPath, ["summary"]),
+      display_id_path: displayId,
+      team_uuid: teamId,
+      project,
+      issue_type: issueType,
+      status,
+      owner,
+      assign: assignee,
+      desc: this.pickString(item, ["field016"]),
+      field_values: this.normalizeOnesProjectFieldValues(item),
+      raw_onesql_item: item,
+    };
+  }
+
+  private normalizeOnesProjectFieldValues(item: Record<string, unknown>): CustomField[] {
+    return Object.entries(item)
+      .filter(([key]) => /^field|^[A-Za-z0-9]{8}$/.test(key))
+      .map(([key, value]) => ({
+        id: key,
+        name: key,
+        value,
+      }));
+  }
+
+  private normalizeOnesProjectFieldRef(raw: unknown): WorkItemRef | null {
+    return this.normalizeRef(raw);
+  }
+
+  private normalizeOnesProjectUser(raw: unknown): WorkItemUser | null {
+    return this.normalizeUser(raw);
   }
 
   private requireTeamId(teamId?: string): string {
@@ -1460,19 +1640,67 @@ export class OnesClient {
     return [];
   }
 
-  private async requestJson<T>(
-    path: string,
+  private normalizeDownloadUrl(url: string): string {
+    const input = url.trim();
+    if (!input) {
+      throw new AppError("INVALID_INPUT", "Resource URL is required");
+    }
+
+    const base = new URL(this.cfg.baseUrl);
+    const normalized = new URL(input, `${base.origin}/`);
+
+    if (normalized.host !== base.host) {
+      throw new AppError(
+        "INVALID_INPUT",
+        "Resource URL must belong to the configured ONES host",
+      );
+    }
+
+    return normalized.toString();
+  }
+
+  private extractFilename(response: Response, url: string): string | null {
+    const disposition = response.headers.get("content-disposition");
+    const match = disposition?.match(/filename\*=UTF-8''([^;]+)|filename=\"?([^\";]+)\"?/i);
+    const encoded = match?.[1] ?? match?.[2] ?? null;
+    if (encoded) {
+      try {
+        return decodeURIComponent(encoded);
+      } catch {
+        return encoded;
+      }
+    }
+
+    const pathname = new URL(url).pathname;
+    const lastSegment = pathname.split("/").filter(Boolean).at(-1) ?? "";
+    return lastSegment || null;
+  }
+
+  private extractResponseSize(response: Response, fallback: number): number {
+    const length = response.headers.get("content-length");
+    if (!length) {
+      return fallback;
+    }
+
+    const parsed = Number(length);
+    return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
+  }
+
+  private async requestResponse(
+    pathOrUrl: string,
     init: RequestInit,
     retryable = true,
-  ): Promise<T> {
+    absolute = false,
+  ): Promise<Response> {
     const requestId = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
     const startedAt = Date.now();
     const authHeaders = await this.sessions.getValidAuthHeaders();
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), this.cfg.timeoutMs);
+    const target = absolute ? pathOrUrl : `${this.cfg.baseUrl}${pathOrUrl}`;
 
     try {
-      const res = await fetch(`${this.cfg.baseUrl}${path}`, {
+      const res = await fetch(target, {
         ...init,
         headers: {
           ...(init.headers ?? {}),
@@ -1485,7 +1713,7 @@ export class OnesClient {
         this.sessions.invalidate();
 
         if (retryable) {
-          return this.requestJson<T>(path, init, false);
+          return this.requestResponse(pathOrUrl, init, false, absolute);
         }
 
         throw new AppError("AUTH_FAILED", "ONES authentication failed", res.status);
@@ -1501,12 +1729,12 @@ export class OnesClient {
 
       logInfo("ones.request", {
         requestId,
-        path,
+        path: absolute ? new URL(target).pathname : pathOrUrl,
         status: res.status,
         durationMs: Date.now() - startedAt,
       });
 
-      return (await res.json()) as T;
+      return res;
     } catch (error) {
       if (error instanceof AppError) {
         throw error;
@@ -1515,6 +1743,15 @@ export class OnesClient {
     } finally {
       clearTimeout(timeout);
     }
+  }
+
+  private async requestJson<T>(
+    path: string,
+    init: RequestInit,
+    retryable = true,
+  ): Promise<T> {
+    const res = await this.requestResponse(path, init, retryable, false);
+    return (await res.json()) as T;
   }
 }
 
