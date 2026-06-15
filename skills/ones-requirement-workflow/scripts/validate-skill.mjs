@@ -4,7 +4,6 @@ import path from "node:path";
 const skillRoot = path.resolve(import.meta.dirname, "..");
 const skillPath = path.join(skillRoot, "SKILL.md");
 const evalsPath = path.join(skillRoot, "evals", "evals.json");
-const smokePath = path.join(skillRoot, "test-runs", "2026-05-14-794-smoke.md");
 
 function fail(message) {
   console.error(message);
@@ -36,12 +35,18 @@ assertIncludes(frontmatter, "description:", "skill description");
 [
   "Do not use the `requirements` MCP server",
   "Do not automatically list bugs",
-  "await_human_action",
+  "await_feature_scenario_confirmation",
+  "await_plan_confirmation",
   "stop_for_owner_decision",
   "await_human_confirmation",
-  "figma-map.yaml",
-  "Only use Figma when the selected item has `status=mapped`",
-  "`working-baseline.md` is the current",
+  "complete_requirement_sources",
+  "extract_requirement_materials",
+  "analysis/feature-scenarios.md",
+  "Figma MCP",
+  "visual/references/<feature-key>/<scenario-key>",
+  "decisions/decisions.md",
+  "analysis/coverage-check.md",
+  "plans/frontend-plan.md",
 ].forEach((needle) => assertIncludes(skill, needle, "required workflow rule"));
 
 if (evals.skill_name !== "ones-requirement-workflow") {
@@ -81,8 +86,39 @@ if (!hasBlockedRunEval) {
   fail("evals.json must cover the blocked #794 tool-unavailable scenario.");
 }
 
-if (!fs.existsSync(smokePath)) {
-  fail("Missing #794 smoke test record.");
+const hasHumanGateEval = evals.evals.some((item) =>
+  item.expectations.some((expectation) =>
+    expectation.includes("human gate") ||
+    expectation.includes("human decision") ||
+    expectation.includes("await_feature_scenario_confirmation") ||
+    expectation.includes("await_plan_confirmation"),
+  ),
+);
+
+if (!hasHumanGateEval) {
+  fail("evals.json must cover the user-facing human gate interaction.");
+}
+
+const hasFigmaMcpEval = evals.evals.some((item) =>
+  item.expectations.some((expectation) =>
+    expectation.includes("Figma MCP") &&
+    expectation.includes("node"),
+  ),
+);
+
+if (!hasFigmaMcpEval) {
+  fail("evals.json must cover Figma MCP node-based visual references.");
+}
+
+const hasFeatureScenarioEval = evals.evals.some((item) =>
+  item.expectations.some((expectation) =>
+    expectation.includes("feature scenarios") ||
+    expectation.includes("feature/scenario"),
+  ),
+);
+
+if (!hasFeatureScenarioEval) {
+  fail("evals.json must cover feature/scenario decomposition.");
 }
 
 if (process.exitCode) {

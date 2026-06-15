@@ -3,6 +3,8 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
   bugDetailOutputSchema,
   bugParentRequirementOutputSchema,
+  downloadOnesResourceInputSchema,
+  downloadedResourceOutputSchema,
   executionTasksOutputSchema,
   requirementBugsOutputSchema,
   requirementDetailOutputSchema,
@@ -241,6 +243,26 @@ export function registerWorkItemTools(
         return createJsonToolResult(await client.getTaskRichResources(task_id, team_id));
       } catch (error) {
         return createToolErrorResult("get_task_rich_resources", error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "download_ones_resource",
+    {
+      title: "Download ONES Resource",
+      description:
+        "Download an ONES-authenticated image or file resource by URL using the current MCP login session.",
+      inputSchema: downloadOnesResourceInputSchema,
+      outputSchema: downloadedResourceOutputSchema,
+      annotations: readOnlyToolAnnotations,
+    },
+    async ({ url }) => {
+      try {
+        const { client } = await getRuntime();
+        return createJsonToolResult(await client.downloadResource(url));
+      } catch (error) {
+        return createToolErrorResult("download_ones_resource", error);
       }
     },
   );

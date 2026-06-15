@@ -9,6 +9,10 @@ export const workItemTaskInputSchema = z.object({
   team_id: z.string().min(1).optional(),
 });
 
+export const downloadOnesResourceInputSchema = z.object({
+  url: z.string().min(1),
+});
+
 const nullableRefSchema = z
   .object({
     id: z.string(),
@@ -178,5 +182,14 @@ export const taskRichResourcesOutputSchema = z.object({
   raw_payload: z.unknown(),
 });
 
+export const downloadedResourceOutputSchema = z.object({
+  url: z.string(),
+  filename: z.string().nullable(),
+  mime_type: z.string().nullable(),
+  size_bytes: z.number().int().min(0),
+  content_base64: z.string(),
+});
+
 export type WorkItemLookupInput = z.infer<typeof workItemLookupInputSchema>;
 export type WorkItemTaskInput = z.infer<typeof workItemTaskInputSchema>;
+export type DownloadOnesResourceInput = z.infer<typeof downloadOnesResourceInputSchema>;

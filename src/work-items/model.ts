@@ -162,3 +162,11 @@ export type TaskRichResourcesResult = {
   resources: TaskRichResource[];
   raw_payload: unknown;
 };
+
+export type DownloadedResourceResult = {
+  url: string;
+  filename: string | null;
+  mime_type: string | null;
+  size_bytes: number;
+  content_base64: string;
+};

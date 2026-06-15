@@ -17,11 +17,15 @@ import type { Runtime } from "../src/services/runtime";
 import type {
   BugDetailResult,
   BugParentRequirementResult,
+  DownloadedResourceResult,
   ExecutionTasksResult,
   RequirementBugsResult,
   RequirementDetailResult,
+  RequirementMaterialsResult,
   ResolveTaskResult,
+  RelatedWikiPagesResult,
   TaskMessagesResult,
+  TaskRichResourcesResult,
 } from "../src/work-items/model";
 
 const keys = [
@@ -66,6 +70,10 @@ function createRuntime(overrides?: {
   getBugParentRequirement?: Runtime["client"]["getBugParentRequirement"];
   listRequirementBugs?: Runtime["client"]["listRequirementBugs"];
   getTaskMessages?: Runtime["client"]["getTaskMessages"];
+  extractRequirementMaterials?: Runtime["client"]["extractRequirementMaterials"];
+  getRelatedWikiPages?: Runtime["client"]["getRelatedWikiPages"];
+  getTaskRichResources?: Runtime["client"]["getTaskRichResources"];
+  downloadResource?: Runtime["client"]["downloadResource"];
 }): Runtime {
   const fallbackDoc: DocDetail = {
     doc: {
@@ -216,6 +224,69 @@ function createRuntime(overrides?: {
     messages: [],
     raw_payload: {},
   };
+  const fallbackRequirementMaterials: RequirementMaterialsResult = {
+    requirement: fallbackRequirementEntity,
+    wiki_pages: [
+      {
+        page_id: "PAGE-1",
+        team_id: "team-1",
+        title: "需求 PRD",
+        url: "https://ones.example.internal/wiki#/team/team-1/page/PAGE-1",
+        source: "related_wiki_pages",
+        error: null,
+      },
+    ],
+    external_links: [
+      {
+        url: "http://giga.usaxure.com/APJR4D?g=4",
+        kind: "prototype",
+        source: "field_values.field016",
+      },
+    ],
+    rich_resources: [
+      {
+        type: "image",
+        resource_id: "IMG-1",
+        src: "https://ones.example.internal/image.png",
+        mime_type: "image/png",
+        alt: null,
+        ref_id: "REQ-1",
+        ref_type: "task",
+        source: "field_values.field016",
+      },
+    ],
+    completeness: {
+      has_requirement_body: true,
+      has_related_wiki_pages: true,
+      has_external_links: true,
+      has_rich_resources: true,
+      missing: [],
+      next_actions: [
+        "fetch_related_wiki_pages",
+        "review_external_links",
+        "persist_or_review_rich_resources",
+        "fetch_task_messages_if_needed",
+      ],
+    },
+    raw_payload: {},
+  };
+  const fallbackRelatedWikiPages: RelatedWikiPagesResult = {
+    requirement: fallbackRequirementEntity,
+    wiki_pages: fallbackRequirementMaterials.wiki_pages,
+    raw_payload: {},
+  };
+  const fallbackTaskRichResources: TaskRichResourcesResult = {
+    entity: fallbackRequirementEntity,
+    resources: fallbackRequirementMaterials.rich_resources,
+    raw_payload: {},
+  };
+  const fallbackDownloadedResource: DownloadedResourceResult = {
+    url: "https://ones.example.internal/wiki/api/wiki/editor/team-1/ref-1/resources/IMG-1.png",
+    filename: "IMG-1.png",
+    mime_type: "image/png",
+    size_bytes: 4,
+    content_base64: "dGVzdA==",
+  };
 
   return {
     cfg: baseConfig,
@@ -260,6 +331,18 @@ function createRuntime(overrides?: {
         overrides?.listRequirementBugs ?? vi.fn().mockResolvedValue(fallbackRequirementBugs),
       getTaskMessages:
         overrides?.getTaskMessages ?? vi.fn().mockResolvedValue(fallbackTaskMessages),
+      extractRequirementMaterials:
+        overrides?.extractRequirementMaterials ??
+        vi.fn().mockResolvedValue(fallbackRequirementMaterials),
+      getRelatedWikiPages:
+        overrides?.getRelatedWikiPages ??
+        vi.fn().mockResolvedValue(fallbackRelatedWikiPages),
+      getTaskRichResources:
+        overrides?.getTaskRichResources ??
+        vi.fn().mockResolvedValue(fallbackTaskRichResources),
+      downloadResource:
+        overrides?.downloadResource ??
+        vi.fn().mockResolvedValue(fallbackDownloadedResource),
     } as Runtime["client"],
   };
 }
@@ -307,6 +390,10 @@ describe("mcp tools", () => {
         "get_bug_parent_requirement",
         "list_requirement_bugs",
         "get_task_messages",
+        "extract_requirement_materials",
+        "get_related_wiki_pages",
+        "get_task_rich_resources",
+        "download_ones_resource",
       ]);
 
       const searchDocs = tools.tools.find((tool) => tool.name === "search_docs");
@@ -660,6 +747,48 @@ describe("mcp tools", () => {
       messages: [],
       raw_payload: {},
     } satisfies TaskMessagesResult);
+    const wikiPages = [
+      {
+        page_id: "PAGE-1",
+        team_id: "team-1",
+        title: "需求 PRD",
+        url: "https://ones.example.internal/wiki#/team/team-1/page/PAGE-1",
+        source: "related_wiki_pages",
+        error: null,
+      },
+    ];
+    const extractRequirementMaterials = vi.fn().mockResolvedValue({
+      requirement: (await getRequirementDetail()).entity,
+      wiki_pages: wikiPages,
+      external_links: [],
+      rich_resources: [],
+      completeness: {
+        has_requirement_body: true,
+        has_related_wiki_pages: true,
+        has_external_links: false,
+        has_rich_resources: false,
+        missing: [],
+        next_actions: ["fetch_related_wiki_pages", "fetch_task_messages_if_needed"],
+      },
+      raw_payload: {},
+    } satisfies RequirementMaterialsResult);
+    const getRelatedWikiPages = vi.fn().mockResolvedValue({
+      requirement: (await getRequirementDetail()).entity,
+      wiki_pages: wikiPages,
+      raw_payload: {},
+    } satisfies RelatedWikiPagesResult);
+    const getTaskRichResources = vi.fn().mockResolvedValue({
+      entity: (await getRequirementDetail()).entity,
+      resources: [],
+      raw_payload: {},
+    } satisfies TaskRichResourcesResult);
+    const downloadResource = vi.fn().mockResolvedValue({
+      url: "https://ones.example.internal/wiki/api/wiki/editor/team-1/ref-1/resources/IMG-1.png",
+      filename: "IMG-1.png",
+      mime_type: "image/png",
+      size_bytes: 4,
+      content_base64: "dGVzdA==",
+    } satisfies DownloadedResourceResult);
     const runtime = createRuntime({
       resolveRequirement,
       getRequirementDetail,
@@ -669,6 +798,10 @@ describe("mcp tools", () => {
       getBugParentRequirement,
       listRequirementBugs,
       getTaskMessages,
+      extractRequirementMaterials,
+      getRelatedWikiPages,
+      getTaskRichResources,
+      downloadResource,
     });
     const { client, server } = await connectTestClient(runtime);
 
@@ -720,6 +853,24 @@ describe("mcp tools", () => {
         name: "get_task_messages",
         arguments: { task_id: "REQ-794" },
       });
+      const materialsResult = await client.callTool({
+        name: "extract_requirement_materials",
+        arguments: { task_id: "REQ-794" },
+      });
+      await client.callTool({
+        name: "get_related_wiki_pages",
+        arguments: { task_id: "REQ-794" },
+      });
+      await client.callTool({
+        name: "get_task_rich_resources",
+        arguments: { task_id: "REQ-794" },
+      });
+      const downloadResult = await client.callTool({
+        name: "download_ones_resource",
+        arguments: {
+          url: "https://ones.example.internal/wiki/api/wiki/editor/team-1/ref-1/resources/IMG-1.png",
+        },
+      });
 
       expect(getRequirementDetail).toHaveBeenCalledWith("REQ-794", undefined);
       expect(getExecutionTasks).toHaveBeenCalledWith("REQ-794", undefined);
@@ -728,9 +879,27 @@ describe("mcp tools", () => {
       expect(getBugParentRequirement).toHaveBeenCalledWith("BUG-1", undefined);
       expect(listRequirementBugs).toHaveBeenCalledWith("REQ-794", undefined);
       expect(getTaskMessages).toHaveBeenCalledWith("REQ-794", undefined);
+      expect(extractRequirementMaterials).toHaveBeenCalledWith("REQ-794", undefined);
+      expect(getRelatedWikiPages).toHaveBeenCalledWith("REQ-794", undefined);
+      expect(getTaskRichResources).toHaveBeenCalledWith("REQ-794", undefined);
+      expect(downloadResource).toHaveBeenCalledWith(
+        "https://ones.example.internal/wiki/api/wiki/editor/team-1/ref-1/resources/IMG-1.png",
+      );
       expect(listBugsResult.structuredContent).toMatchObject({
         count: 1,
         bugs: [{ entity_type: "bug", task_id: "BUG-1" }],
+      });
+      expect(materialsResult.structuredContent).toMatchObject({
+        wiki_pages: [{ page_id: "PAGE-1" }],
+        completeness: {
+          has_requirement_body: true,
+          has_related_wiki_pages: true,
+        },
+      });
+      expect(downloadResult.structuredContent).toMatchObject({
+        filename: "IMG-1.png",
+        mime_type: "image/png",
+        content_base64: "dGVzdA==",
       });
     } finally {
       await server.close();

@@ -2,6 +2,8 @@
 
 Project-local Codex skill for ONES-driven development work.
 
+Current workflow centers on `analysis/feature-scenarios.md`, Figma MCP node-based visual references, `plans/frontend-plan.md`, `analysis/coverage-check.md`, and human confirmation gates before implementation.
+
 ## Files
 
 - `SKILL.md`: the skill instructions.

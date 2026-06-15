@@ -147,6 +147,10 @@ ONES_PASSWORD = "your_password_here"
 - `get_bug_parent_requirement`
 - `list_requirement_bugs`
 - `get_task_messages`
+- `extract_requirement_materials`
+- `get_related_wiki_pages`
+- `get_task_rich_resources`
+- `download_ones_resource`
 
 这些工具都会继续返回可读的 JSON 文本内容，同时也会提供 MCP `structuredContent` 供支持结构化结果的客户端直接消费。
 
@@ -380,6 +384,10 @@ ONES_TEAM_ID=63FL1oSZ
 - `get_bug_parent_requirement`：从 bug 的关联任务里反查需求
 - `list_requirement_bugs`：按需列出需求下的 bug
 - `get_task_messages`：读取任务消息或评论
+- `extract_requirement_materials`：从需求任务正文和富文本字段中提取 wiki、外部链接、图片资源和完整性提示
+- `get_related_wiki_pages`：发现需求关联或正文链接到的 ONES wiki 页面
+- `get_task_rich_resources`：提取任务正文里的富文本图片资源
+- `download_ones_resource`：使用当前 MCP 登录态下载 ONES 鉴权资源，返回文件元数据和 base64 内容
 
 示例参数：
 
@@ -390,6 +398,16 @@ ONES_TEAM_ID=63FL1oSZ
 ```json
 {"task_id":"REQ-794"}
 ```
+
+```json
+{"url":"https://ones.example.internal/wiki/api/wiki/editor/team-id/ref-id/resources/mock-image.png"}
+```
+
+说明：
+
+- `get_task_rich_resources` 默认只返回资源元数据和 `src`，不会自动下载文件
+- 如果图片/附件链接需要 ONES 鉴权，调用 `download_ones_resource`，MCP 会复用当前登录态下载
+- 当前下载返回 `content_base64`，是否落盘由调用方自行决定
 
 ## 发布流程
 
