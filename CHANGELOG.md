@@ -1,5 +1,15 @@
 # @bakarhythm/get-doc-content
 
+## 1.5.0
+
+### Minor Changes
+
+- 87255fc: Add current ONES work-item detail support, authenticated resource downloads, and expanded requirement workflow skill guidance.
+
+### Patch Changes
+
+- f9d7810: Add read-only ONES work-item tools for requirement and bug workflow support.
+
 ## 1.4.0
 
 ### Minor Changes
