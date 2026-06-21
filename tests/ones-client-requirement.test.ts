@@ -68,16 +68,8 @@ it("returns latest linked doc content for requirement hash", async () => {
       title: "Latest",
       source_format: "html",
     },
-    llm_view: {
-      type: "document",
-      source_format: "html",
-      children: [
-        {
-          type: "paragraph",
-          children: [{ type: "text", value: "Hello ONES" }],
-        },
-      ],
-    },
+    markdown: "Hello ONES",
   });
-  expect(out.human_view).toBeUndefined();
+  expect(out).not.toHaveProperty("llm_view");
+  expect(out).not.toHaveProperty("human_view");
 });

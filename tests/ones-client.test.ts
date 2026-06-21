@@ -98,7 +98,7 @@ it("invalidates once on 403 and surfaces auth failure", async () => {
   expect(getValidAuthHeaders).toHaveBeenCalledTimes(3);
 });
 
-it("returns llm_view by default and preserves plain content coercion for non-string payload", async () => {
+it("returns markdown by default and preserves plain content coercion for non-string payload", async () => {
   const fetchMock = vi.fn<typeof fetch>().mockResolvedValueOnce(
     new Response(JSON.stringify({ id: "D-1", title: "Doc", content: 123 }), {
       status: 200,
@@ -138,23 +138,14 @@ it("returns llm_view by default and preserves plain content coercion for non-str
       title: "Doc",
       source_format: "plain",
     },
-    llm_view: {
-      type: "document",
-      source_format: "plain",
-      children: [
-        {
-          type: "paragraph",
-          children: [{ type: "text", value: "123" }],
-        },
-      ],
-      resources: [],
-    },
+    markdown: "123",
   });
-  expect(result.human_view).toBeUndefined();
+  expect(result).not.toHaveProperty("llm_view");
+  expect(result).not.toHaveProperty("human_view");
   expect(result.raw).toBeUndefined();
 });
 
-it("returns both views, raw payload, and ocr-enriched resources when requested", async () => {
+it("returns markdown, raw payload, and image placeholders when requested", async () => {
   const fetchMock = vi
     .fn<typeof fetch>()
     .mockResolvedValueOnce(
@@ -209,7 +200,6 @@ it("returns both views, raw payload, and ocr-enriched resources when requested",
   );
 
   const result = await client.getDoc("D-1", {
-    view: "both",
     includeRaw: true,
     includeResources: true,
   });
@@ -220,33 +210,13 @@ it("returns both views, raw payload, and ocr-enriched resources when requested",
       title: "Doc",
       source_format: "html",
     },
-    llm_view: {
-      type: "document",
-      source_format: "html",
-      children: [
-        { type: "heading", level: 1 },
-        { type: "paragraph" },
-        { type: "image", resourceRef: "res-image-0" },
-      ],
-      resources: [
-        {
-          id: "res-image-0",
-          src: "https://img.example/1.png",
-          ocr: {
-            status: "ok",
-            text: "图片里的文字",
-          },
-        },
-      ],
-    },
-    human_view: {
-      format: "markdown",
-      content: "# 标题\n\n正文\n\n![示意图](https://img.example/1.png)",
-    },
+    markdown: "# 标题\n\n正文\n\n![示意图](https://img.example/1.png)",
     raw: {
       content: "<h1>标题</h1><p>正文</p><img src=\"https://img.example/1.png\" alt=\"示意图\">",
     },
   });
+  expect(result).not.toHaveProperty("llm_view");
+  expect(result).not.toHaveProperty("human_view");
 });
 
 it("resolves relative wiki page resources to absolute editor resource urls", async () => {
@@ -314,23 +284,14 @@ it("resolves relative wiki page resources to absolute editor resource urls", asy
   );
 
   const result = await client.getPageDoc("63FL1oSZ", "P-1", {
-    view: "both",
     includeRaw: false,
     includeResources: true,
   });
 
-  expect(result.llm_view?.resources).toEqual([
-    {
-      id: "res-image-0",
-      type: "embed",
-      embedType: "image",
-      src: "https://ones.example.internal/wiki/api/wiki/editor/63FL1oSZ/CyyFbXuD/resources/GtOawA3kTPPgoj6A6ZEFIXyTcK4XvrWNnIrlMl_878A.png",
-      alt: "image",
-    },
-  ]);
-  expect(result.human_view?.content).toContain(
+  expect(result.markdown).toContain(
     "![image](https://ones.example.internal/wiki/api/wiki/editor/63FL1oSZ/CyyFbXuD/resources/GtOawA3kTPPgoj6A6ZEFIXyTcK4XvrWNnIrlMl_878A.png)",
   );
+  expect(result).not.toHaveProperty("llm_view");
 });
 
 it("normalizes ONES task info into requirement detail", async () => {
@@ -1210,6 +1171,154 @@ it("downloads ONES resource with existing auth session and returns base64 conten
     mime_type: "image/png",
     size_bytes: 4,
     content_base64: "dGVzdA==",
+  });
+});
+
+it("surfaces 405 resource download as upstream error without invalidating auth", async () => {
+  const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
+    new Response("<title>405</title>", {
+      status: 405,
+      headers: { "content-type": "text/html" },
+    }),
+  );
+  const getValidAuthHeaders = vi.fn().mockResolvedValue({
+    Authorization: "Bearer token",
+    Cookie: "ones_session=abc",
+  });
+  const invalidate = vi.fn();
+
+  vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
+
+  const client = new OnesClient(
+    {
+      baseUrl: "https://ones.example.internal",
+      defaultTeamId: "63FL1oSZ",
+      timeoutMs: 5000,
+      maxContentChars: 20000,
+      ocr: {
+        provider: null,
+        endpoint: null,
+        apiKey: null,
+        timeoutMs: 1000,
+      },
+    },
+    {
+      getValidAuthHeaders,
+      invalidate,
+    },
+    {
+      resolveSearchPath: vi.fn(),
+      resolveDocTemplate: vi.fn(),
+      resolveRequirementTemplate: vi.fn(),
+    } as any,
+  );
+
+  await expect(
+    client.downloadResource(
+      "https://ones.example.internal/wiki/api/wiki/editor/team-1/ref-1/resources/mock-image.png",
+    ),
+  ).rejects.toMatchObject({
+    code: "UPSTREAM_ERROR",
+    status: 405,
+  });
+  expect(fetchMock).toHaveBeenCalledTimes(1);
+  expect(getValidAuthHeaders).toHaveBeenCalledTimes(1);
+  expect(invalidate).not.toHaveBeenCalled();
+});
+
+it("downloads rendered wiki page editor resources with the page content token", async () => {
+  const fetchMock = vi
+    .fn<typeof fetch>()
+    .mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          uuid: "KkVZSkGh",
+          title: "#794 Buyer提现线上化",
+          team_uuid: "63FL1oSZ",
+          ref_uuid: "CyyFbXuD",
+        }),
+        {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        },
+      ),
+    )
+    .mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          token: "editor-content-token",
+          content: JSON.stringify({
+            blocks: [
+              {
+                type: "embed",
+                embedType: "image",
+                embedData: {
+                  src: "OeJZQ29mIPtnDfB449jIQdULfI4mLpXVyinnP24rai0.png",
+                },
+              },
+            ],
+          }),
+        }),
+        {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        },
+      ),
+    )
+    .mockResolvedValueOnce(
+      new Response(new Uint8Array([137, 80, 78, 71]), {
+        status: 200,
+        headers: {
+          "content-type": "image/png",
+          "content-length": "4",
+        },
+      }),
+    );
+
+  vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
+
+  const client = new OnesClient(
+    {
+      baseUrl: "https://ones.example.internal",
+      defaultTeamId: "63FL1oSZ",
+      timeoutMs: 5000,
+      maxContentChars: 20000,
+      ocr: {
+        provider: null,
+        endpoint: null,
+        apiKey: null,
+        timeoutMs: 1000,
+      },
+    },
+    {
+      getValidAuthHeaders: vi.fn().mockResolvedValue({ Authorization: "Bearer token" }),
+      invalidate: vi.fn(),
+    },
+    {
+      resolveSearchPath: vi.fn(),
+      resolveDocTemplate: vi.fn(),
+      resolveRequirementTemplate: vi.fn(),
+    } as any,
+  );
+
+  const doc = await client.getPageDoc("63FL1oSZ", "KkVZSkGh");
+  const imageUrl =
+    "https://ones.example.internal/wiki/api/wiki/editor/63FL1oSZ/CyyFbXuD/resources/OeJZQ29mIPtnDfB449jIQdULfI4mLpXVyinnP24rai0.png";
+  expect(doc.markdown).toBe(`![image](${imageUrl})`);
+
+  const result = await client.downloadResource(imageUrl);
+
+  expect(fetchMock).toHaveBeenLastCalledWith(
+    `${imageUrl}?token=editor-content-token`,
+    expect.objectContaining({
+      method: "GET",
+    }),
+  );
+  expect(result).toMatchObject({
+    url: imageUrl,
+    mime_type: "image/png",
+    size_bytes: 4,
+    content_base64: "iVBORw==",
   });
 });
 

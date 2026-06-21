@@ -22,7 +22,7 @@ export function registerGetDocTool(
     {
       title: "Get ONES Document",
       description:
-        "Get ONES doc by context ref (URL or #requirement) and return llm/human structured views.",
+        "Get ONES doc by context ref (URL or #requirement) and return markdown content.",
       inputSchema: getDocInputSchema,
       outputSchema: getDocOutputSchema,
       annotations: readOnlyToolAnnotations,

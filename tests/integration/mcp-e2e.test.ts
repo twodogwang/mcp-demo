@@ -72,18 +72,10 @@ describe("mcp e2e flow with mocked ones", () => {
         title: "Doc 1",
         source_format: "html",
       },
-      llm_view: {
-        type: "document",
-        source_format: "html",
-        children: [
-          {
-            type: "paragraph",
-            children: [{ type: "text", value: "Hello ONES" }],
-          },
-        ],
-      },
+      markdown: "Hello ONES",
     });
-    expect(doc.human_view).toBeUndefined();
+    expect(doc).not.toHaveProperty("llm_view");
+    expect(doc).not.toHaveProperty("human_view");
   });
 
   it("get_doc with #12345 returns latest linked doc content", async () => {
@@ -157,15 +149,7 @@ describe("mcp e2e flow with mocked ones", () => {
         title: "Latest Doc",
         source_format: "html",
       },
-      llm_view: {
-        type: "document",
-        children: [
-          {
-            type: "paragraph",
-            children: [{ type: "text", value: "Latest Content" }],
-          },
-        ],
-      },
+      markdown: "Latest Content",
     });
   });
 
@@ -253,7 +237,6 @@ describe("mcp e2e flow with mocked ones", () => {
     }
 
     const doc = await client.getPageDoc(parsed.teamId, parsed.pageId, {
-      view: "both",
       includeRaw: true,
       includeResources: false,
     });
@@ -262,37 +245,16 @@ describe("mcp e2e flow with mocked ones", () => {
         title: "#47520 后台管理系统数据权限重构",
         source_format: "richtext-json",
       },
-      llm_view: {
-        type: "document",
-        source_format: "richtext-json",
-        children: [
-          {
-            type: "paragraph",
-            children: [{ type: "text", value: "#47520 后台管理系统数据权限重构" }],
-          },
-          {
-            type: "paragraph",
-            children: [{ type: "text", value: "需求目的/背景" }],
-          },
-          {
-            type: "paragraph",
-            children: [{ type: "text", value: "权限管理核心作用" }],
-          },
-        ],
-      },
-      human_view: {
-        format: "markdown",
-      },
+      markdown: expect.stringContaining("需求目的/背景"),
       raw: {
         content: expect.stringContaining("\"blocks\""),
       },
     });
-    expect(doc.human_view?.content).toContain("需求目的/背景");
-    expect(doc.human_view?.content).toContain("权限管理核心作用");
-    expect(doc.llm_view?.resources).toBeUndefined();
+    expect(doc.markdown).toContain("权限管理核心作用");
+    expect(doc).not.toHaveProperty("llm_view");
   });
 
-  it("renders wiki page human_view with absolute editor resource urls", async () => {
+  it("renders wiki page markdown with absolute editor resource urls", async () => {
     const parsed = parseRef(
       "https://ones.example.internal/wiki/#/team/63FL1oSZ/space/JhN6fj4M/page/KkVZSkGh",
       "ones.example.internal",
@@ -371,22 +333,13 @@ describe("mcp e2e flow with mocked ones", () => {
     }
 
     const doc = await client.getPageDoc(parsed.teamId, parsed.pageId, {
-      view: "both",
       includeRaw: false,
       includeResources: true,
     });
 
-    expect(doc.llm_view?.resources).toEqual([
-      {
-        id: "res-image-0",
-        type: "embed",
-        embedType: "image",
-        src: "https://ones.example.internal/wiki/api/wiki/editor/63FL1oSZ/CyyFbXuD/resources/GtOawA3kTPPgoj6A6ZEFIXyTcK4XvrWNnIrlMl_878A.png",
-        alt: "image",
-      },
-    ]);
-    expect(doc.human_view?.content).toContain(
+    expect(doc.markdown).toContain(
       "![image](https://ones.example.internal/wiki/api/wiki/editor/63FL1oSZ/CyyFbXuD/resources/GtOawA3kTPPgoj6A6ZEFIXyTcK4XvrWNnIrlMl_878A.png)",
     );
+    expect(doc).not.toHaveProperty("llm_view");
   });
 });

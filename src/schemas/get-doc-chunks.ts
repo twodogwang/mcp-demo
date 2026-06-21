@@ -3,7 +3,6 @@ import { z } from "zod";
 import {
   docMetadataSchema,
   documentChunkDetailSchema,
-  llmDocumentViewSchema,
 } from "./document-shared.js";
 
 export const getDocChunksInputSchema = z.object({
@@ -16,7 +15,7 @@ export const getDocChunksInputSchema = z.object({
 export const getDocChunksOutputSchema = z.object({
   doc: docMetadataSchema,
   chunk: documentChunkDetailSchema,
-  content: llmDocumentViewSchema,
+  markdown: z.string(),
   has_more: z.boolean(),
   next_cursor: z.string().nullable(),
 });

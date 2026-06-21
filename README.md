@@ -229,7 +229,7 @@ npm run eval:llm -- --case table-page-summary
 这个脚本会：
 
 - 按配置里的 `ref` 实时拉取 ONES 文档
-- 选择 `llm_view`、`raw` 或 `full` 作为模型输入
+- 选择 `markdown`、`raw` 或 `full` 作为模型输入
 - 调用 OpenAI Responses API 回答问题
 - 按 `requiredPhrases` 和 `forbiddenPhrases` 输出简单通过率报告
 
@@ -245,7 +245,7 @@ OPENAI_BASE_URL=
 ```json
 {
   "model": "gpt-5.2",
-  "variant": "llm_view",
+  "variant": "markdown",
   "maxOutputTokens": 800,
   "refs": {
     "table-page": "https://ones.example.internal/wiki/#/team/TEAM_ID/space/SPACE_ID/page/PAGE_ID"
@@ -264,14 +264,11 @@ OPENAI_BASE_URL=
 
 建议用法：
 
-- 先跑 `variant=llm_view`
+- 先跑 `variant=markdown`
 - 再跑 `variant=raw`
 - 比较同一批 case 的通过率、缺失项和误报项
 
-如果当前没有可用模型额度，可以先做人审。仓库里已提供：
-
-- 人工审查手册：`docs/review/llm-view-manual-review-template.md`
-- 审查记录样例：`docs/review/llm-view-manual-review-example.json`
+历史 `llm_view` 人工审查材料已归档到 `docs/review/archive/`，仅供追溯旧结构化视图设计。
 
 ## MCP 工具
 
@@ -298,7 +295,7 @@ OPENAI_BASE_URL=
 
 ### 2) `get_doc`
 
-通过上下文引用获取文档，并返回面向 LLM 的结构化视图，按需附带 Markdown 人类阅读视图。
+通过上下文引用获取文档，并返回面向 LLM 的 Markdown 内容。
 
 `ref` 支持：
 
@@ -307,7 +304,6 @@ OPENAI_BASE_URL=
 
 可选参数：
 
-- `view`：`"llm"` | `"human"` | `"both"`，默认 `llm`
 - `include_raw`：是否返回原始 ONES 内容，默认 `false`
 - `include_resources`：是否返回资源清单及 OCR 元数据，默认 `true`
 
@@ -392,7 +388,7 @@ OPENAI_BASE_URL=
 兼容工具接收 `task_id`，适合已知 task id、需要处理多候选、或排查编号解析与详情接口哪个环节失败的场景。
 
 ```json
-{"ref":"#12345","view":"both","include_raw":true,"include_resources":true}
+{"ref":"#12345","include_raw":true,"include_resources":true}
 ```
 
 ### 7) 工作项工具

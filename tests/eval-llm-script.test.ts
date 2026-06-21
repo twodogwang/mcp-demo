@@ -14,29 +14,7 @@ const detail: DocDetail = {
     source_format: "html",
     updated_at: "2026-04-23T00:00:00Z",
   },
-  llm_view: {
-    type: "document",
-    source_format: "html",
-    children: [
-      {
-        type: "paragraph",
-        children: [{ type: "text", value: "支持增量同步" }],
-        path: "root/0",
-      },
-    ],
-    resources: [
-      {
-        id: "res-image-0",
-        type: "image",
-        src: "https://img.example/1.png",
-        alt: "示意图",
-      },
-    ],
-  },
-  human_view: {
-    format: "markdown",
-    content: "支持增量同步",
-  },
+  markdown: "支持增量同步\n\n![示意图](https://img.example/1.png)",
   raw: {
     content: "<p>支持增量同步</p>",
   },
@@ -70,8 +48,9 @@ describe("eval llm script", () => {
     expect(resolveEvalRef("#12345", {})).toBe("#12345");
   });
 
-  it("builds llm_view, raw and full inputs", () => {
-    expect(buildEvalInput(detail, "llm_view")).toContain("\"llm_view\"");
+  it("builds markdown, raw and full inputs", () => {
+    expect(buildEvalInput(detail, "markdown")).toContain("\"markdown\"");
+    expect(buildEvalInput(detail, "markdown")).not.toContain("\"raw\"");
     expect(buildEvalInput(detail, "raw")).toContain("<p>支持增量同步</p>");
     expect(buildEvalInput(detail, "full")).toContain("\"doc\"");
     expect(buildEvalInput(detail, "full")).toContain("\"raw\"");

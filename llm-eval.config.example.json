@@ -1,8 +1,8 @@
 {
   "model": "gpt-5.2",
-  "variant": "llm_view",
+  "variant": "markdown",
   "maxOutputTokens": 800,
-  "developerPrompt": "你会收到一份 ONES 文档的结构化返回值和一个问题。只依据输入内容回答，不要补充输入中不存在的信息。优先使用表格结构、图片资源和 OCR 信息。",
+  "developerPrompt": "你会收到一份 ONES 文档的 markdown 和一个问题。只依据输入内容回答，不要补充输入中不存在的信息。优先使用表格、图片占位和原文证据。",
   "refs": {
     "table-page": "https://ones.example.internal/wiki/#/team/TEAM_ID/space/SPACE_ID/page/PAGE_ID",
     "req-12345": "#12345"

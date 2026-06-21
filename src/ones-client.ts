@@ -12,7 +12,6 @@ import type {
   GetDocChunksOptions,
   GetDocContextOptions,
   GetDocSectionOptions,
-  LlmDocumentView,
   ParsedDocument,
 } from "./documents/model.js";
 import { buildDocumentChunks, getChunkSlice, parseChunkCursor } from "./documents/chunks.js";
@@ -90,7 +89,6 @@ type ParsedTaskUrl = {
 };
 
 const DEFAULT_GET_DOC_OPTIONS: GetDocOptions = {
-  view: "llm",
   includeRaw: false,
   includeResources: true,
 };
@@ -99,6 +97,104 @@ const DEFAULT_GET_DOC_SECTION_OPTIONS: GetDocSectionOptions = {
   includeDescendants: false,
   includeResources: true,
 };
+
+function stripSectionNumber(title: string): string {
+  return title
+    .replace(/^\s*(?:\d+(?:\.\d+)*[.)、]?\s*)+/, "")
+    .replace(/^\s*[（(]?[一二三四五六七八九十\d]+[）)、.]\s*/, "")
+    .trim();
+}
+
+function tokenizeForSectionMatch(value: string): Set<string> {
+  const normalized = value.toLowerCase();
+  const tokens = new Set<string>();
+  const asciiTokens = normalized.match(/[a-z0-9]+/g) ?? [];
+  for (const token of asciiTokens) {
+    tokens.add(token);
+  }
+
+  const cjkSegments = normalized.match(/\p{Script=Han}+/gu) ?? [];
+  const stopChars = new Set(["的", "了", "么", "什", "哪", "些", "要", "做", "写", "里", "和", "或"]);
+  for (const segment of cjkSegments) {
+    if (segment.length === 1) {
+      if (!stopChars.has(segment)) {
+        tokens.add(segment);
+      }
+      continue;
+    }
+
+    for (let index = 0; index < segment.length - 1; index += 1) {
+      tokens.add(segment.slice(index, index + 2));
+    }
+    for (const char of segment) {
+      if (!stopChars.has(char)) {
+        tokens.add(char);
+      }
+    }
+  }
+
+  return tokens;
+}
+
+function scoreSectionTitle(section: DocumentOutline["sections"][number], question: string): number {
+  const rawTitle = section.title.trim().toLowerCase();
+  const title = stripSectionNumber(section.title).toLowerCase();
+  const normalizedQuestion = question.toLowerCase();
+  if (!title) {
+    return 0;
+  }
+
+  let score = 0;
+  if (normalizedQuestion.includes(rawTitle)) {
+    score += 120;
+  }
+  if (normalizedQuestion.includes(title)) {
+    score += 100;
+  }
+  if (title.includes("页") && /页面|前端|page/i.test(question)) {
+    score += 8;
+  }
+
+  const titleTokens = tokenizeForSectionMatch(title);
+  const questionTokens = tokenizeForSectionMatch(question);
+  for (const token of titleTokens) {
+    if (questionTokens.has(token)) {
+      score += token.length > 1 ? 3 : 1;
+    }
+  }
+
+  return score;
+}
+
+function selectScoredSections(
+  sections: DocumentOutline["sections"],
+  question: string,
+  maxChars: number,
+): DocumentOutline["sections"] {
+  const ranked = sections
+    .map((section, index) => ({
+      section,
+      index,
+      score: scoreSectionTitle(section, question),
+    }))
+    .filter((item) => item.score > 0)
+    .sort((left, right) => right.score - left.score || left.index - right.index);
+
+  const selected: DocumentOutline["sections"] = [];
+  let estimatedChars = 0;
+  for (const item of ranked) {
+    if (selected.length > 0 && estimatedChars + item.section.estimated_chars > maxChars) {
+      break;
+    }
+    selected.push(item.section);
+    estimatedChars += item.section.estimated_chars;
+    if (estimatedChars >= maxChars) {
+      break;
+    }
+  }
+
+  return selected;
+}
 
 const SEARCH_TASKS_BY_NUMBER_QUERY = `
   query GROUP_TASK_DATA($groupBy: GroupBy, $groupOrderBy: OrderBy, $orderBy: OrderBy, $filterGroup: [Filter!], $search: Search, $pagination: Pagination, $limit: Int) {
@@ -119,6 +215,7 @@ const SEARCH_TASKS_BY_NUMBER_QUERY = `
 
 export class OnesClient {
   private readonly ocrRunner: ReturnType<typeof createOcrRunner>;
+  private readonly editorResourceTokens = new Map<string, string>();
 
   constructor(
     private readonly cfg: OnesClientConfig,
@@ -452,7 +549,8 @@ export class OnesClient {
 
   async downloadResource(url: string): Promise<DownloadedResourceResult> {
     const normalizedUrl = this.normalizeDownloadUrl(url);
-    const response = await this.requestResponse(normalizedUrl, { method: "GET" }, true, true);
+    const requestUrl = this.withCachedEditorResourceToken(normalizedUrl);
+    const response = await this.requestResponse(requestUrl, { method: "GET" }, true, true);
     const bytes = new Uint8Array(await response.arrayBuffer());
 
     return {
@@ -714,9 +812,6 @@ export class OnesClient {
     loaded: LoadedDocument,
     options: GetDocOptions,
   ): Promise<DocDetail> {
-    const resources = options.includeResources
-      ? await this.enrichResourcesWithOcr(loaded.parsed.resources)
-      : undefined;
     const renderDoc: ParsedDocument = {
       children: loaded.parsed.children,
       resources: loaded.parsed.resources,
@@ -724,23 +819,8 @@ export class OnesClient {
 
     const detail: DocDetail = {
       doc: loaded.doc,
+      markdown: renderMarkdown(renderDoc),
     };
-
-    if (options.view === "llm" || options.view === "both") {
-      detail.llm_view = {
-        type: "document",
-        source_format: loaded.doc.source_format,
-        children: loaded.parsed.children,
-        ...(resources ? { resources } : {}),
-      };
-    }
-
-    if (options.view === "human" || options.view === "both") {
-      detail.human_view = {
-        format: "markdown",
-        content: renderMarkdown(renderDoc),
-      };
-    }
 
     if (options.includeRaw) {
       detail.raw = {
@@ -1350,7 +1430,11 @@ export class OnesClient {
   ): Promise<LoadedDocument> {
     const source = detectDocumentSource(contentSource);
     const parsed = this.parseDocument(source.raw, source.format);
-    const normalizedResources = this.normalizeResourceUrls(metaSource, parsed.resources);
+    const normalizedResources = this.normalizeResourceUrls(
+      metaSource,
+      contentSource,
+      parsed.resources,
+    );
     return {
       doc: {
         id: String(metaSource.id ?? fallbackId),
@@ -1370,23 +1454,6 @@ export class OnesClient {
     };
   }
 
-  private async buildLlmView(
-    sourceFormat: DocMetadata["source_format"],
-    parsed: ParsedDocument,
-    includeResources: boolean,
-  ): Promise<LlmDocumentView> {
-    const resources = includeResources
-      ? await this.enrichResourcesWithOcr(parsed.resources)
-      : undefined;
-
-    return {
-      type: "document",
-      source_format: sourceFormat,
-      children: parsed.children,
-      ...(resources ? { resources } : {}),
-    };
-  }
-
   private buildOutlineFromLoaded(loaded: LoadedDocument): DocumentOutline {
     return buildDocumentOutline(loaded.doc, loaded.parsed);
   }
@@ -1401,15 +1468,12 @@ export class OnesClient {
     if (!section) {
       throw new AppError("NOT_FOUND", `Section not found: ${sectionId}`, 404);
     }
+    const parsed = getSectionSlice(loaded.parsed, outline, sectionId, options.includeDescendants);
 
     return {
       doc: loaded.doc,
       section,
-      content: await this.buildLlmView(
-        loaded.doc.source_format,
-        getSectionSlice(loaded.parsed, outline, sectionId, options.includeDescendants),
-        options.includeResources,
-      ),
+      markdown: renderMarkdown(parsed),
       truncated: false,
     };
   }
@@ -1425,15 +1489,12 @@ export class OnesClient {
     if (!chunk) {
       throw new AppError("NOT_FOUND", `Chunk not found: ${options.cursor ?? "chunk-0"}`, 404);
     }
+    const parsed = getChunkSlice(loaded.parsed, chunk);
 
     return {
       doc: loaded.doc,
       chunk,
-      content: await this.buildLlmView(
-        loaded.doc.source_format,
-        getChunkSlice(loaded.parsed, chunk),
-        options.includeResources,
-      ),
+      markdown: renderMarkdown(parsed),
       has_more: chunkIndex < chunks.length - 1,
       next_cursor: chunkIndex < chunks.length - 1 ? chunks[chunkIndex + 1]?.cursor ?? null : null,
     };
@@ -1456,7 +1517,7 @@ export class OnesClient {
       resources: [],
     };
 
-    const matchedSections = outline.sections.filter((section) => question.includes(section.title));
+    const matchedSections = selectScoredSections(outline.sections, question, options.maxChars);
     const needsFullScan = /整篇|全文|所有|完整|冲突|一致性|全面|全量/.test(question);
 
     if (needsFullScan) {
@@ -1491,6 +1552,17 @@ export class OnesClient {
       reason = "document_fits_budget";
       selectedSections = outline.sections.map((section) => section.id);
       parsedContext = loaded.parsed;
+    } else {
+      const chunks = buildDocumentChunks(outline, options.maxChars);
+      const chunk = chunks[0];
+      strategy = "full_chunks";
+      reason = "fallback_to_first_chunk";
+      if (chunk) {
+        selectedSections = chunk.section_ids;
+        consumedChunks = [chunk.index];
+        parsedContext = getChunkSlice(loaded.parsed, chunk);
+        truncated = chunks.length > 1;
+      }
     }
 
     return {
@@ -1500,21 +1572,26 @@ export class OnesClient {
       selected_sections: selectedSections,
       consumed_chunks: consumedChunks,
       truncated,
-      context: await this.buildLlmView(
-        loaded.doc.source_format,
-        parsedContext,
-        options.includeResources,
-      ),
+      markdown: renderMarkdown(parsedContext),
     };
   }
 
   private normalizeResourceUrls(
     metaSource: Record<string, unknown>,
+    contentSource: Record<string, unknown>,
     resources: DocumentResource[],
   ): DocumentResource[] {
     const teamId = typeof metaSource.team_uuid === "string" ? metaSource.team_uuid.trim() : "";
     const refUuid = typeof metaSource.ref_uuid === "string" ? metaSource.ref_uuid.trim() : "";
+    const token = typeof contentSource.token === "string" ? contentSource.token.trim() : "";
     const baseUrl = this.cfg.baseUrl.replace(/\/$/, "");
+    const editorBaseUrl = teamId && refUuid
+      ? this.buildEditorResourceBaseUrl(teamId, refUuid)
+      : "";
+
+    if (editorBaseUrl && token) {
+      this.editorResourceTokens.set(editorBaseUrl, token);
+    }
 
     return resources.map((resource) => {
       if (/^https?:\/\//i.test(resource.src)) {
@@ -1530,6 +1607,34 @@ export class OnesClient {
 
       return resource;
     });
+  }
+
+  private buildEditorResourceBaseUrl(teamId: string, refUuid: string): string {
+    const baseUrl = this.cfg.baseUrl.replace(/\/$/, "");
+    return `${baseUrl}/wiki/api/wiki/editor/${encodeURIComponent(teamId)}/${encodeURIComponent(refUuid)}`;
+  }
+
+  private withCachedEditorResourceToken(url: string): string {
+    const parsed = new URL(url);
+    if (parsed.searchParams.has("token")) {
+      return url;
+    }
+
+    const match = parsed.pathname.match(
+      /^(\/wiki\/api\/wiki\/editor\/[^/]+\/[^/]+)\/resources\//,
+    );
+    const editorPath = match?.[1];
+    if (!editorPath) {
+      return url;
+    }
+
+    const token = this.editorResourceTokens.get(`${parsed.origin}${editorPath}`);
+    if (!token) {
+      return url;
+    }
+
+    parsed.searchParams.set("token", token);
+    return parsed.toString();
   }
 
   private parseDocument(raw: string, format: DocDetail["doc"]["source_format"]): ParsedDocument {
@@ -1709,7 +1814,7 @@ export class OnesClient {
         signal: controller.signal,
       });
 
-      if ([401, 403, 405].includes(res.status)) {
+      if ([401, 403].includes(res.status)) {
         this.sessions.invalidate();
 
         if (retryable) {
@@ -1717,6 +1822,14 @@ export class OnesClient {
         }
 
         throw new AppError("AUTH_FAILED", "ONES authentication failed", res.status);
+      }
+
+      if (res.status === 405) {
+        throw new AppError(
+          "UPSTREAM_ERROR",
+          "ONES upstream request method not allowed",
+          405,
+        );
       }
 
       if (res.status === 404) {

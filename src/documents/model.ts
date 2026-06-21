@@ -1,20 +1,15 @@
-export type GetDocView = "llm" | "human" | "both";
-
 export type GetDocOptionInput = {
-  view: GetDocView;
   include_raw: boolean;
   include_resources: boolean;
 };
 
 export type GetDocOptions = {
-  view: GetDocView;
   includeRaw: boolean;
   includeResources: boolean;
 };
 
 export function toGetDocOptions(input: GetDocOptionInput): GetDocOptions {
   return {
-    view: input.view,
     includeRaw: input.include_raw,
     includeResources: input.include_resources,
   };
@@ -86,18 +81,6 @@ export type ParsedDocument = {
   resources: DocumentResource[];
 };
 
-export type LlmDocumentView = {
-  type: "document";
-  source_format: DocumentSourceFormat;
-  children: DocumentNode[];
-  resources?: DocumentResource[];
-};
-
-export type HumanDocumentView = {
-  format: "markdown";
-  content: string;
-};
-
 export type DocMetadata = {
   id: string;
   title: string;
@@ -111,8 +94,7 @@ export type RawDocumentView = {
 
 export type DocDetail = {
   doc: DocMetadata;
-  llm_view?: LlmDocumentView;
-  human_view?: HumanDocumentView;
+  markdown: string;
   raw?: RawDocumentView;
 };
 
@@ -138,7 +120,7 @@ export type DocumentOutline = {
 export type DocumentSectionDetail = {
   doc: DocMetadata;
   section: DocumentSectionOutline;
-  content: LlmDocumentView;
+  markdown: string;
   truncated: boolean;
 };
 
@@ -165,7 +147,7 @@ export type GetDocChunksOptions = {
 export type DocumentChunkResult = {
   doc: DocMetadata;
   chunk: DocumentChunkDetail;
-  content: LlmDocumentView;
+  markdown: string;
   has_more: boolean;
   next_cursor: string | null;
 };
@@ -189,5 +171,5 @@ export type DocumentContextResult = {
   selected_sections: string[];
   consumed_chunks: number[];
   truncated: boolean;
-  context: LlmDocumentView;
+  markdown: string;
 };

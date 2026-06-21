@@ -192,8 +192,7 @@ select_feature_scenario
 ```json
 {
   "doc": {},
-  "llm_view": {},
-  "human_view": {},
+  "markdown": "",
   "raw": {}
 }
 ```

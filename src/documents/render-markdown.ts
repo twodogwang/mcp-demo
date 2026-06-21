@@ -1,10 +1,15 @@
 import type { DocumentNode, ParsedDocument, TableCellNode } from "./model.js";
 
+type RenderContext = {
+  nestedTables: string[];
+};
+
 export function renderMarkdown(doc: ParsedDocument): string {
-  return doc.children.map((node) => renderNode(node, doc)).filter(Boolean).join("\n\n");
+  const context: RenderContext = { nestedTables: [] };
+  return doc.children.map((node) => renderNode(node, doc, context)).filter(Boolean).join("\n\n");
 }
 
-function renderNode(node: DocumentNode, doc: ParsedDocument): string {
+function renderNode(node: DocumentNode, doc: ParsedDocument, context: RenderContext): string {
   if (node.type === "heading") {
     const level = Math.max(1, Math.min(6, node.level));
     const text = renderInlineText(node.children);
@@ -24,47 +29,115 @@ function renderNode(node: DocumentNode, doc: ParsedDocument): string {
     return `![${escapeBrackets(alt)}](${resource.src})`;
   }
 
-  return renderTable(node);
+  return renderTable(node, doc, context);
 }
 
-function renderTable(node: Extract<DocumentNode, { type: "table" }>): string {
+function renderTable(
+  node: Extract<DocumentNode, { type: "table" }>,
+  doc: ParsedDocument,
+  context: RenderContext,
+): string {
   if (node.rows.length === 0) {
     return `[复杂表格，详见原文（${node.path}）]`;
   }
 
-  const matrix = node.rows.map((row) => row.cells.map((cell) => renderSimpleCell(cell)));
-  if (matrix.some((row) => row.some((cell) => cell === null))) {
+  const matrix = buildTableMatrix(node, doc, context);
+  if (!matrix) {
     return `[复杂表格，详见原文（${node.path}）]`;
   }
 
-  const expectedColumns = matrix[0]?.length ?? 0;
-  if (expectedColumns === 0 || matrix.some((row) => row.length !== expectedColumns)) {
+  const expectedColumns = Math.max(...matrix.map((row) => row.length));
+  if (expectedColumns === 0) {
     return `[复杂表格，详见原文（${node.path}）]`;
   }
 
-  const header = matrix[0] ?? [];
-  const bodyRows = matrix.slice(1);
+  const normalizedMatrix = matrix.map((row) => padRow(row, expectedColumns));
+  const header = normalizedMatrix[0] ?? [];
+  const bodyRows = normalizedMatrix.slice(1);
   const headerLine = `| ${header.join(" | ")} |`;
   const separatorLine = `| ${header.map(() => "---").join(" | ")} |`;
   const bodyLines = bodyRows.map((row) => `| ${row.join(" | ")} |`);
-  return [headerLine, separatorLine, ...bodyLines].join("\n");
+  const table = [headerLine, separatorLine, ...bodyLines].join("\n");
+  if (context.nestedTables.length === 0) {
+    return table;
+  }
+
+  const nestedTables = context.nestedTables.splice(0);
+  return [table, ...nestedTables].join("\n\n");
 }
 
-function renderSimpleCell(cell: TableCellNode): string | null {
-  if (cell.colspan !== 1 || cell.rowspan !== 1) {
-    return null;
+function buildTableMatrix(
+  node: Extract<DocumentNode, { type: "table" }>,
+  doc: ParsedDocument,
+  context: RenderContext,
+): string[][] | null {
+  const matrix: string[][] = [];
+  const activeRowspans: number[] = [];
+
+  for (const row of node.rows) {
+    const cells: string[] = [];
+    let columnIndex = 0;
+
+    const fillActiveRowspans = () => {
+      while ((activeRowspans[columnIndex] ?? 0) > 0) {
+        cells[columnIndex] = "";
+        activeRowspans[columnIndex] -= 1;
+        columnIndex += 1;
+      }
+    };
+
+    for (const cell of row.cells) {
+      fillActiveRowspans();
+
+      const content = renderCellContent(cell, doc, context);
+      if (content === null) {
+        return null;
+      }
+
+      const colspan = Math.max(1, cell.colspan);
+      const rowspan = Math.max(1, cell.rowspan);
+      for (let offset = 0; offset < colspan; offset += 1) {
+        const targetColumn = columnIndex + offset;
+        cells[targetColumn] = offset === 0 ? content : "";
+        if (rowspan > 1) {
+          activeRowspans[targetColumn] = Math.max(activeRowspans[targetColumn] ?? 0, rowspan - 1);
+        }
+      }
+      columnIndex += colspan;
+    }
+
+    fillActiveRowspans();
+    matrix.push(cells);
   }
 
-  if (cell.children.length !== 1) {
-    return null;
+  return matrix;
+}
+
+function renderCellContent(cell: TableCellNode, doc: ParsedDocument, context: RenderContext): string | null {
+  return cell.children
+    .map((node) => {
+      if (node.type !== "table") {
+        return renderNode(node, doc, context);
+      }
+
+      const childContext: RenderContext = { nestedTables: [] };
+      const table = renderTable(node, doc, childContext);
+      const tableNumber = context.nestedTables.length + 1;
+      context.nestedTables.push(`子表 ${tableNumber}:\n${table}`);
+      return `[见子表 ${tableNumber}]`;
+    })
+    .filter(Boolean)
+    .join("<br>")
+    .replace(/\|/g, "\\|")
+    .replace(/\n+/g, "<br>");
+}
+
+function padRow(row: string[], columns: number): string[] {
+  if (row.length >= columns) {
+    return row;
   }
 
-  const node = cell.children[0];
-  if (node?.type !== "paragraph") {
-    return null;
-  }
-
-  return renderInlineText(node.children).replace(/\|/g, "\\|");
+  return [...row, ...Array.from({ length: columns - row.length }, () => "")];
 }
 
 function renderInlineText(children: Array<{ value: string }>): string {

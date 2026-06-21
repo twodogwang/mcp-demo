@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { docMetadataSchema, llmDocumentViewSchema } from "./document-shared.js";
+import { docMetadataSchema } from "./document-shared.js";
 
 export const getDocContextInputSchema = z.object({
   ref: z.string().min(1),
@@ -17,5 +17,5 @@ export const getDocContextOutputSchema = z.object({
   selected_sections: z.array(z.string()),
   consumed_chunks: z.array(z.number().int().min(0)),
   truncated: z.boolean(),
-  context: llmDocumentViewSchema,
+  markdown: z.string(),
 });

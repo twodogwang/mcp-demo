@@ -1,5 +1,7 @@
 # LLM View 人工审查模板
 
+> Archived: `llm_view` 已在 markdown-only 重构中移除。本文仅用于追溯旧结构化视图评审流程。
+
 用于在**不依赖模型额度**的情况下，人工评估 `get_doc` 返回的 `llm_view` 是否足够支撑后续 LLM 理解、抽取和定位。
 
 ## 适用范围

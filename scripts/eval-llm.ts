@@ -4,12 +4,12 @@ import { resolve } from "node:path";
 
 import { SessionManager } from "../src/auth/session-manager.js";
 import { loadConfig } from "../src/config.js";
-import type { DocDetail, GetDocView } from "../src/documents/model.js";
+import type { DocDetail } from "../src/documents/model.js";
 import { EndpointDiscovery } from "../src/discovery/endpoint-discovery.js";
 import { OnesClient } from "../src/ones-client.js";
 import { parseRef } from "../src/ref-parser.js";
 
-export type EvalVariant = "llm_view" | "raw" | "full";
+export type EvalVariant = "markdown" | "raw" | "full";
 
 export type EvalArgs = {
   configPath: string;
@@ -55,7 +55,7 @@ type ResponsesPayload = {
 const DEFAULT_EVAL_CONFIG_PATH = "llm-eval.config.json";
 const DEFAULT_OPENAI_BASE_URL = "https://api.openai.com/v1";
 const DEFAULT_MODEL_PROMPT =
-  "你会收到一份 ONES 文档的结构化返回值和一个问题。只依据输入内容回答，不要补充输入中不存在的信息。优先使用表格结构、图片资源和 OCR 信息。";
+  "你会收到一份 ONES 文档的 markdown 和一个问题。只依据输入内容回答，不要补充输入中不存在的信息。优先使用表格、图片占位和原文证据。";
 
 export function parseEvalArgs(argv: string[]): EvalArgs {
   const args: EvalArgs = {
@@ -119,11 +119,11 @@ export function resolveEvalRef(
 }
 
 export function buildEvalInput(detail: DocDetail, variant: EvalVariant): string {
-  if (variant === "llm_view") {
+  if (variant === "markdown") {
     return JSON.stringify(
       {
         doc: detail.doc,
-        llm_view: detail.llm_view ?? null,
+        markdown: detail.markdown,
       },
       null,
       2,
@@ -220,7 +220,7 @@ export async function runEvalLlm(argv: string[]): Promise<string> {
 
   const results = [];
   for (const item of selectedCases) {
-    const variant = item.variant ?? args.variant ?? evalConfig.variant ?? "llm_view";
+    const variant = item.variant ?? args.variant ?? evalConfig.variant ?? "markdown";
     const ref = resolveEvalRef(item.ref, evalConfig.refs);
     const detail = await fetchDocDetail(client, cfg.baseUrl, ref, variant);
     const input = buildEvalInput(detail, variant);
@@ -252,12 +252,10 @@ async function fetchDocDetail(
   variant: EvalVariant,
 ): Promise<DocDetail> {
   const parsed = parseRef(ref, new URL(baseUrl).host);
-  const view: GetDocView = variant === "full" ? "both" : "llm";
-  const includeRaw = variant !== "llm_view";
+  const includeRaw = variant !== "markdown";
 
   if (parsed.kind === "doc") {
     return client.getDoc(parsed.docId, {
-      view,
       includeRaw,
       includeResources: true,
     });
@@ -265,14 +263,12 @@ async function fetchDocDetail(
 
   if (parsed.kind === "page") {
     return client.getPageDoc(parsed.teamId, parsed.pageId, {
-      view,
       includeRaw,
       includeResources: true,
     });
   }
 
   return client.getDocByRequirementId(parsed.requirementId, {
-    view,
     includeRaw,
     includeResources: true,
   });
@@ -427,7 +423,7 @@ function formatEvalReport(
 }
 
 function isEvalVariant(value: string): value is EvalVariant {
-  return value === "llm_view" || value === "raw" || value === "full";
+  return value === "markdown" || value === "raw" || value === "full";
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {

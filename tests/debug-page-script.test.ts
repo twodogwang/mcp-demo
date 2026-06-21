@@ -120,40 +120,7 @@ describe("debug page script", () => {
           source_format: "html",
           updated_at: "2026-04-23T00:00:00Z",
         },
-        llm_view: {
-          type: "document",
-          source_format: "html",
-          children: [
-            {
-              type: "heading",
-              level: 1,
-              children: [{ type: "text", value: "标题" }],
-              path: "root/0",
-            },
-            {
-              type: "table",
-              rows: [],
-              path: "root/1",
-            },
-            {
-              type: "image",
-              resourceRef: "res-image-0",
-              path: "root/2",
-            },
-          ],
-          resources: [
-            {
-              id: "res-image-0",
-              type: "image",
-              src: "https://img.example/1.png",
-              alt: "示意图",
-              ocr: {
-                status: "failed",
-                error: "ocr_http_502",
-              },
-            },
-          ],
-        },
+        markdown: "# 标题\n\n| 字段 | 规则 |\n| --- | --- |\n| 图片 | ![示意图](https://img.example/1.png) |",
         raw: {
           content: "<h1>标题</h1><table></table>",
         },
@@ -162,11 +129,9 @@ describe("debug page script", () => {
     );
 
     expect(text).toContain("source_format: html");
-    expect(text).toContain("top_level_node_counts");
-    expect(text).toContain("\"heading\": 1");
-    expect(text).toContain("\"table\": 1");
-    expect(text).toContain("\"image\": 1");
-    expect(text).toContain("ocr_status: failed");
+    expect(text).toContain("markdown_preview");
+    expect(text).toContain("# 标题");
+    expect(text).toContain("![示意图](https://img.example/1.png)");
     expect(text).toContain("raw_preview");
     expect(text).toContain("<h1>标题</h1>");
     expect(text).not.toContain("[truncated]");

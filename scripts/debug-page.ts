@@ -7,7 +7,7 @@ import { SessionManager } from "../src/auth/session-manager.js";
 import { EndpointDiscovery } from "../src/discovery/endpoint-discovery.js";
 import { OnesClient } from "../src/ones-client.js";
 import { parseRef, type ParsedRef } from "../src/ref-parser.js";
-import type { DocDetail, DocumentNode } from "../src/documents/model.js";
+import type { DocDetail } from "../src/documents/model.js";
 
 export type DebugPageArgs = {
   ref: string;
@@ -85,29 +85,16 @@ export function formatDebugReport(
   detail: DocDetail,
   rawChars: RawCharLimit,
 ): string {
-  const topLevelCounts = countTopLevelNodeTypes(detail.llm_view?.children ?? []);
-  const resources = detail.llm_view?.resources ?? [];
   const lines = [
     `parsed_ref: ${JSON.stringify(parsedRef, null, 2)}`,
     `doc_id: ${detail.doc.id}`,
     `title: ${detail.doc.title}`,
     `updated_at: ${detail.doc.updated_at ?? ""}`,
     `source_format: ${detail.doc.source_format}`,
-    `top_level_node_counts: ${JSON.stringify(topLevelCounts, null, 2)}`,
-    `resource_count: ${resources.length}`,
   ];
 
-  for (const [index, resource] of resources.entries()) {
-    lines.push(`resource_${index + 1}:`);
-    lines.push(`  id: ${resource.id}`);
-    lines.push(`  type: ${resource.type}`);
-    lines.push(`  src: ${resource.src}`);
-    lines.push(`  alt: ${resource.alt ?? ""}`);
-    lines.push(`  ocr_status: ${resource.ocr?.status ?? "skipped"}`);
-    if (resource.ocr?.status === "failed") {
-      lines.push(`  ocr_error: ${resource.ocr.error}`);
-    }
-  }
+  lines.push(`markdown_chars: ${detail.markdown.length}`);
+  lines.push(`markdown_preview:\n${detail.markdown.slice(0, 2000)}`);
 
   const raw = detail.raw?.content ?? "";
   const previewLength = rawChars === "all" ? raw.length : rawChars;
@@ -116,14 +103,6 @@ export function formatDebugReport(
   lines.push(`raw_preview:\n${rawPreview}${raw.length > previewLength ? "\n...[truncated]" : ""}`);
 
   return lines.join("\n");
-}
-
-function countTopLevelNodeTypes(nodes: DocumentNode[]): Record<string, number> {
-  const counts: Record<string, number> = {};
-  for (const node of nodes) {
-    counts[node.type] = (counts[node.type] ?? 0) + 1;
-  }
-  return counts;
 }
 
 export async function runDebugPage(argv: string[]): Promise<string> {
@@ -153,18 +132,15 @@ export async function runDebugPage(argv: string[]): Promise<string> {
   const detail =
     parsedRef.kind === "doc"
       ? await client.getDoc(parsedRef.docId, {
-          view: "llm",
           includeRaw: true,
           includeResources: true,
         })
       : parsedRef.kind === "page"
         ? await client.getPageDoc(parsedRef.teamId, parsedRef.pageId, {
-            view: "llm",
             includeRaw: true,
             includeResources: true,
           })
         : await client.getDocByRequirementId(parsedRef.requirementId, {
-            view: "llm",
             includeRaw: true,
             includeResources: true,
           });

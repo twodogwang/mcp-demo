@@ -3,7 +3,6 @@ import { z } from "zod";
 import {
   docMetadataSchema,
   documentSectionOutlineSchema,
-  llmDocumentViewSchema,
 } from "./document-shared.js";
 
 export const getDocSectionInputSchema = z.object({
@@ -16,6 +15,6 @@ export const getDocSectionInputSchema = z.object({
 export const getDocSectionOutputSchema = z.object({
   doc: docMetadataSchema,
   section: documentSectionOutlineSchema,
-  content: llmDocumentViewSchema,
+  markdown: z.string(),
   truncated: z.boolean(),
 });

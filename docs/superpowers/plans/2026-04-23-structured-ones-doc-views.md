@@ -1,5 +1,7 @@
 # Structured ONES Document Views Implementation Plan
 
+> Deprecated: the `llm_view` / `human_view` dual-view design has been removed. Markdown is now the only document content format; see `docs/ones-doc-tools-markdown-only-plan.md` for the replacement plan.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Make `get_doc` return a default LLM-oriented structured document view that preserves tables, nested tables, images, and OCR results, while allowing optional human-readable Markdown output.

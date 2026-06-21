@@ -9,13 +9,6 @@ export const docMetadataSchema = z.object({
   source_format: documentSourceFormatSchema,
 });
 
-export const llmDocumentViewSchema = z.object({
-  type: z.literal("document"),
-  source_format: documentSourceFormatSchema,
-  children: z.array(z.any()),
-  resources: z.array(z.any()).optional(),
-});
-
 export const documentSectionOutlineSchema = z.object({
   id: z.string(),
   path: z.string(),

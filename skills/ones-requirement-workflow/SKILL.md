@@ -387,8 +387,7 @@ Existing wiki document tools keep their document-domain structure:
 ```json
 {
   "doc": {},
-  "llm_view": {},
-  "human_view": {},
+  "markdown": "",
   "raw": {}
 }
 ```

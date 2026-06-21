@@ -90,12 +90,7 @@ function createRuntime(overrides?: {
       title: "Doc 1",
       source_format: "html",
     },
-    llm_view: {
-      type: "document",
-      source_format: "html",
-      children: [],
-      resources: [],
-    },
+    markdown: "# Doc 1",
   };
   const fallbackOutline: DocumentOutline = {
     doc: fallbackDoc.doc,
@@ -118,7 +113,7 @@ function createRuntime(overrides?: {
   const fallbackSection: DocumentSectionDetail = {
     doc: fallbackDoc.doc,
     section: fallbackOutline.sections[0]!,
-    content: fallbackDoc.llm_view!,
+    markdown: "# Doc 1",
     truncated: false,
   };
   const fallbackChunk: DocumentChunkResult = {
@@ -131,7 +126,7 @@ function createRuntime(overrides?: {
       start_index: 0,
       end_index: 1,
     },
-    content: fallbackDoc.llm_view!,
+    markdown: "# Doc 1",
     has_more: false,
     next_cursor: null,
   };
@@ -142,7 +137,7 @@ function createRuntime(overrides?: {
     selected_sections: ["sec-1"],
     consumed_chunks: [],
     truncated: false,
-    context: fallbackDoc.llm_view!,
+    markdown: "# Doc 1",
   };
   const fallbackRequirementEntity = {
     entity_type: "requirement" as const,
@@ -476,10 +471,16 @@ describe("mcp tools", () => {
       });
       expect(searchDocs?.outputSchema?.properties).toHaveProperty("items");
       expect(getDoc?.outputSchema?.properties).toHaveProperty("doc");
+      expect(getDoc?.outputSchema?.properties).toHaveProperty("markdown");
+      expect(getDoc?.inputSchema?.properties).not.toHaveProperty("view");
+      expect(getDoc?.outputSchema?.properties).not.toHaveProperty("llm_view");
       expect(getDocOutline?.outputSchema?.properties).toHaveProperty("sections");
       expect(getDocSection?.outputSchema?.properties).toHaveProperty("section");
+      expect(getDocSection?.outputSchema?.properties).toHaveProperty("markdown");
       expect(getDocChunks?.outputSchema?.properties).toHaveProperty("chunk");
+      expect(getDocChunks?.outputSchema?.properties).toHaveProperty("markdown");
       expect(getDocContext?.outputSchema?.properties).toHaveProperty("strategy");
+      expect(getDocContext?.outputSchema?.properties).toHaveProperty("markdown");
       expect(getRequirementDetailByRef?.inputSchema?.properties).toHaveProperty("ref");
       expect(getRequirementDetailByRef?.outputSchema?.properties).toHaveProperty("entity");
       expect(resolveRequirement?.annotations).toMatchObject({
@@ -503,23 +504,21 @@ describe("mcp tools", () => {
     const withDefaults = parseGetDocInput({ ref: "#12345" });
     expect(withDefaults).toEqual({
       ref: "#12345",
-      view: "llm",
       include_raw: false,
       include_resources: true,
     });
 
     const withExplicitOptions = parseGetDocInput({
       ref: "#12345",
-      view: "both",
       include_raw: true,
       include_resources: false,
     });
     expect(withExplicitOptions).toEqual({
       ref: "#12345",
-      view: "both",
       include_raw: true,
       include_resources: false,
     });
+    expect(() => parseGetDocInput({ ref: "#12345", view: "both" })).toThrow();
 
     expect(() =>
       parseGetDocInput({
@@ -577,12 +576,7 @@ describe("mcp tools", () => {
         title: "Latest Doc",
         source_format: "html",
       },
-      llm_view: {
-        type: "document",
-        source_format: "html",
-        children: [],
-        resources: [],
-      },
+      markdown: "# Latest Doc",
     };
     const runtime = createRuntime({
       getDocByRequirementId: vi.fn().mockResolvedValue(doc),
@@ -627,12 +621,7 @@ describe("mcp tools", () => {
           start_index: 0,
           end_index: 2,
         },
-        content: {
-          type: "document",
-          source_format: "html",
-          children: [],
-          resources: [],
-        },
+        markdown: "# Doc 1",
         has_more: true,
         next_cursor: "chunk-1",
       } satisfies DocumentChunkResult),
@@ -677,12 +666,7 @@ describe("mcp tools", () => {
         selected_sections: ["sec-2"],
         consumed_chunks: [],
         truncated: false,
-        context: {
-          type: "document",
-          source_format: "html",
-          children: [],
-          resources: [],
-        },
+        markdown: "## 权限规则",
       } satisfies DocumentContextResult),
     });
     const { client, server } = await connectTestClient(runtime);
