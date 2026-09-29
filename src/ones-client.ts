@@ -840,11 +840,17 @@ export class OnesClient {
   }
 
   private async loadPageDoc(teamId: string, pageId: string): Promise<LoadedDocument> {
-    const infoPath = `/wiki/api/wiki/team/${encodeURIComponent(teamId)}/page/${encodeURIComponent(pageId)}/info`;
-    const contentPath = `/wiki/api/wiki/team/${encodeURIComponent(teamId)}/online_page/${encodeURIComponent(pageId)}/content`;
+    const encodedTeamId = encodeURIComponent(teamId);
+    const encodedPageId = encodeURIComponent(pageId);
+    const pagePath = `/wiki/api/wiki/team/${encodedTeamId}/page/${encodedPageId}`;
+    const infoPath = `${pagePath}/info`;
     const infoData = await this.requestJson<Record<string, unknown>>(infoPath, {
       method: "GET",
     });
+    const refType = this.pickString(infoData, ["ref_type", "refType"]);
+    const contentPath = refType === "1"
+      ? pagePath
+      : `/wiki/api/wiki/team/${encodedTeamId}/online_page/${encodedPageId}/content`;
     const contentData = await this.requestJson<Record<string, unknown>>(contentPath, {
       method: "GET",
     });

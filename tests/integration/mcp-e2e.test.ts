@@ -167,6 +167,7 @@ describe("mcp e2e flow with mocked ones", () => {
           JSON.stringify({
             title: "#47520 后台管理系统数据权限重构",
             updated_at: "2026-03-11T07:36:00Z",
+            ref_type: 6,
           }),
           {
             status: 200,
@@ -240,6 +241,11 @@ describe("mcp e2e flow with mocked ones", () => {
       includeRaw: true,
       includeResources: false,
     });
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      "https://ones.example.internal/wiki/api/wiki/team/63FL1oSZ/online_page/9Pkrzqbf/content",
+      expect.any(Object),
+    );
     expect(doc).toMatchObject({
       doc: {
         title: "#47520 后台管理系统数据权限重构",
@@ -252,6 +258,87 @@ describe("mcp e2e flow with mocked ones", () => {
     });
     expect(doc.markdown).toContain("权限管理核心作用");
     expect(doc).not.toHaveProperty("llm_view");
+  });
+
+  it("loads ref type 1 wiki page content from the page endpoint", async () => {
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            uuid: "Z2tvPRxN",
+            title: "yzc_front部分公共规范",
+            ref_type: 1,
+            ref_uuid: "",
+          }),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            uuid: "Z2tvPRxN",
+            title: "yzc_front部分公共规范",
+            content: "<h1>自定义 hooks</h1><p>公共规范正文</p>",
+            ref_type: 1,
+            ref_uuid: "",
+          }),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          },
+        ),
+      );
+
+    vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
+
+    const client = new OnesClient(
+      {
+        baseUrl: "https://ones.example.internal",
+        timeoutMs: 5000,
+        maxContentChars: 20000,
+        ocr: {
+          provider: null,
+          endpoint: null,
+          apiKey: null,
+          timeoutMs: 1000,
+        },
+      },
+      {
+        getValidAuthHeaders: vi.fn().mockResolvedValue({ Authorization: "Bearer ok" }),
+        invalidate: vi.fn(),
+      } as any,
+      {
+        resolveSearchPath: vi.fn(),
+        resolveDocTemplate: vi.fn(),
+        resolveRequirementTemplate: vi.fn(),
+      } as any,
+    );
+
+    const doc = await client.getPageDoc("63FL1oSZ", "Z2tvPRxN", {
+      includeRaw: true,
+      includeResources: false,
+    });
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      "https://ones.example.internal/wiki/api/wiki/team/63FL1oSZ/page/Z2tvPRxN",
+      expect.any(Object),
+    );
+    expect(doc).toMatchObject({
+      doc: {
+        id: "Z2tvPRxN",
+        title: "yzc_front部分公共规范",
+        source_format: "html",
+      },
+      markdown: expect.stringContaining("公共规范正文"),
+      raw: {
+        content: expect.stringContaining("自定义 hooks"),
+      },
+    });
   });
 
   it("renders wiki page markdown with absolute editor resource urls", async () => {
