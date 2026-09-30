@@ -63,6 +63,47 @@ describe("SessionManager", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it("reads and caches the active team UUID from the authenticated session", async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          teams: [
+            { uuid: "team-disabled", status: 0 },
+            { uuid: "team-active", status: 1 },
+          ],
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
+
+    const sm = new SessionManager({
+      baseUrl: "https://ones.example.internal",
+      username: null,
+      password: null,
+      discovery: {} as any,
+      externalSession: {
+        authToken: "token-1",
+        cookie: "ones-lt=abc",
+        origin: null,
+        referer: null,
+        userAgent: null,
+      },
+    });
+
+    await expect(sm.getCurrentTeamUuid()).resolves.toBe("team-active");
+    await expect(sm.getCurrentTeamUuid()).resolves.toBe("team-active");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const tokenInfoCall = fetchMock.mock.calls[0];
+    expect(tokenInfoCall?.[0]).toBe(
+      "https://ones.example.internal/project/api/project/auth/token_info",
+    );
+    expect(tokenInfoCall?.[1]).toEqual(expect.objectContaining({ method: "GET" }));
+    expect(new Headers(tokenInfoCall?.[1]?.headers).get("Authorization")).toBe(
+      "Bearer token-1",
+    );
+  });
+
   it("performs identity login flow and returns browser-like auth headers", async () => {
     const fetchMock = vi
       .fn<typeof fetch>()
@@ -141,6 +182,7 @@ describe("SessionManager", () => {
         new Response(
           JSON.stringify({
             user: { email: "u@example.com" },
+            teams: [{ uuid: "team-from-login", status: 1 }],
           }),
           {
             status: 200,
@@ -168,6 +210,7 @@ describe("SessionManager", () => {
       Referer: "https://ones.example.internal/project/",
       "User-Agent": expect.stringContaining("wxwork/5.0.8"),
     });
+    await expect(sm.getCurrentTeamUuid()).resolves.toBe("team-from-login");
     const certCall = fetchMock.mock.calls[0];
     expect(certCall?.[0]).toBe("https://ones.example.internal/identity/api/encryption_cert");
     expect(certCall?.[1]).toEqual(expect.objectContaining({ method: "POST" }));

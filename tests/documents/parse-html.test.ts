@@ -159,6 +159,46 @@ describe("parseHtmlDocument", () => {
     ]);
   });
 
+  it("preserves stable ONES image metadata and deduplicates repeated data-uuid values", () => {
+    const doc = parseHtmlDocument(`
+      <figure>
+        <img
+          src="https://ones.example.internal/expired.png?signature=old"
+          data-uuid="Btj2N3hz"
+          data-ref-type="wiki"
+          data-ref-id="page-ref-1"
+          data-mime="image/png"
+          alt="流程截图"
+          width="640"
+          height="360"
+        >
+        <figcaption>提现审核流程</figcaption>
+      </figure>
+      <img
+        src="https://ones.example.internal/expired-again.png?signature=old"
+        data-uuid="Btj2N3hz"
+        data-ref-type="wiki"
+        data-ref-id="page-ref-1"
+      >
+    `);
+
+    expect(doc.resources).toHaveLength(1);
+    expect(doc.resources[0]).toMatchObject({
+      type: "image",
+      src: "https://ones.example.internal/expired.png?signature=old",
+      resource_id: "Btj2N3hz",
+      ref_type: "wiki",
+      ref_id: "page-ref-1",
+      alt: "流程截图",
+      caption: "提现审核流程",
+      filename: "expired.png",
+      mime_type: "image/png",
+      width: 640,
+      height: 360,
+    });
+    expect(doc.children.filter((node) => node.type === "image")).toHaveLength(2);
+  });
+
   it("does not preserve images nested inside headings", () => {
     const doc = parseHtmlDocument("<h2>标题<img src=\"https://img.example/in-heading.png\"></h2>");
 

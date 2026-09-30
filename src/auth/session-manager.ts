@@ -30,6 +30,13 @@ type TokenPayload = {
   access_token?: string;
 };
 
+type TokenInfoPayload = {
+  teams?: Array<{
+    uuid?: string;
+    status?: number;
+  }>;
+};
+
 const DEFAULT_ONES_USER_AGENT =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36 wxwork/5.0.8 WeChat/2.0.4 wwmver/3.26.508.613";
 
@@ -38,6 +45,9 @@ export class SessionManager {
   private inflight: Promise<Record<string, string>> | null = null;
   private cookies = new Map<string, string>();
   private externalSessionExpired = false;
+  private currentTeamUuid: string | null = null;
+  private sessionContextLoaded = false;
+  private sessionContextInflight: Promise<void> | null = null;
 
   constructor(private readonly cfg: SessionConfig) {}
 
@@ -71,10 +81,28 @@ export class SessionManager {
     }
   }
 
+  async getCurrentTeamUuid(): Promise<string | null> {
+    const authHeaders = await this.getValidAuthHeaders();
+    if (!this.sessionContextLoaded) {
+      if (!this.sessionContextInflight) {
+        this.sessionContextInflight = this.loadSessionContext(authHeaders);
+      }
+      try {
+        await this.sessionContextInflight;
+      } finally {
+        this.sessionContextInflight = null;
+      }
+    }
+    return this.currentTeamUuid;
+  }
+
   invalidate(): void {
     this.authHeaders = null;
     this.inflight = null;
     this.cookies.clear();
+    this.currentTeamUuid = null;
+    this.sessionContextLoaded = false;
+    this.sessionContextInflight = null;
     this.externalSessionExpired = Boolean(
       this.cfg.externalSession?.authToken || this.cfg.externalSession?.cookie,
     );
@@ -142,16 +170,45 @@ export class SessionManager {
     }
 
     const authHeaders = this.buildAuthenticatedHeaders(accessToken);
-    await this.requestJson(
+    const tokenInfo = await this.requestJson<TokenInfoPayload>(
       "/project/api/project/auth/token_info",
       {
         method: "GET",
         headers: authHeaders,
       },
-      false,
     );
+    this.rememberSessionContext(tokenInfo);
 
     return this.buildAuthenticatedHeaders(accessToken);
+  }
+
+  private async loadSessionContext(
+    authHeaders: Record<string, string>,
+  ): Promise<void> {
+    const tokenInfo = await this.requestJson<TokenInfoPayload>(
+      "/project/api/project/auth/token_info",
+      {
+        method: "GET",
+        headers: authHeaders,
+      },
+    );
+    this.rememberSessionContext(tokenInfo);
+  }
+
+  private rememberSessionContext(tokenInfo: TokenInfoPayload): void {
+    const teams = tokenInfo.teams ?? [];
+    const activeTeam = teams.find(
+      (team) =>
+        team.status === 1 &&
+        typeof team.uuid === "string" &&
+        team.uuid.trim(),
+    );
+    const fallbackTeam = teams.find(
+      (team) => typeof team.uuid === "string" && team.uuid.trim(),
+    );
+    this.currentTeamUuid =
+      activeTeam?.uuid?.trim() ?? fallbackTeam?.uuid?.trim() ?? null;
+    this.sessionContextLoaded = true;
   }
 
   private async exchangeAuthRequestForCode(

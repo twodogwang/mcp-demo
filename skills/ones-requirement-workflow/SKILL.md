@@ -388,9 +388,28 @@ Existing wiki document tools keep their document-domain structure:
 {
   "doc": {},
   "markdown": "",
-  "raw": {}
+  "raw": {},
+  "resources": [
+    {
+      "type": "image",
+      "resource_id": "Btj2N3hz",
+      "ref_type": "wiki",
+      "ref_id": "page-ref-id",
+      "alt": null,
+      "caption": null,
+      "filename": "image.png",
+      "mime_type": "image/png",
+      "size_bytes": null,
+      "width": null,
+      "height": null,
+      "url": "https://signed.example/image.png",
+      "error": null
+    }
+  ]
 }
 ```
+
+For Wiki image analysis, call `get_doc` with `include_resources=true`, read the stable `resource_id` values from `resources`, then call `download_ones_resource_by_id`. The download tool returns MCP-native `ImageContent`; `get_doc` does not embed image base64. A failed image refresh is recorded in that resource's `error` and does not fail the document read.
 
 Work-item tools should use a normalized entity shell with standard fields such as:
 
@@ -437,6 +456,7 @@ Compatibility and debugging tools:
 - `get_related_wiki_pages`
 - `get_task_rich_resources`
 - `download_ones_resource`
+- `download_ones_resource_by_id`
 
 Use compatibility/debugging tools only when a task id is already known, a `*_by_ref` lookup returns ambiguous candidates, or the workflow needs to isolate whether number resolution or detail loading failed.
 

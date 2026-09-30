@@ -22,7 +22,7 @@ export function registerGetDocTool(
     {
       title: "Get ONES Document",
       description:
-        "Get ONES doc by context ref (URL or #requirement) and return markdown content.",
+        "Get an ONES document by URL or #requirement. With include_resources=true, refresh image URLs and return stable resource_id metadata; then call download_ones_resource_by_id for MCP-native image content.",
       inputSchema: getDocInputSchema,
       outputSchema: getDocOutputSchema,
       annotations: readOnlyToolAnnotations,

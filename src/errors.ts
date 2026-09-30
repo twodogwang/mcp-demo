@@ -3,6 +3,7 @@ export type ErrorCode =
   | "AUTH_FAILED"
   | "NOT_FOUND"
   | "UPSTREAM_ERROR"
+  | "RESOURCE_DOWNLOAD_FAILED"
   | "INVALID_DOC_REF"
   | "CONFIG_ERROR"
   | "NO_LINKED_DOC"

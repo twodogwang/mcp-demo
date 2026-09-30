@@ -170,3 +170,13 @@ export type DownloadedResourceResult = {
   size_bytes: number;
   content_base64: string;
 };
+
+export type DownloadedResourceByIdResult = {
+  resource_id: string;
+  filename: string | null;
+  mime_type: string;
+  size_bytes: number;
+  width: number | null;
+  height: number | null;
+  content_base64: string;
+};

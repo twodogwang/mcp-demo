@@ -18,6 +18,7 @@ import type {
   BugDetailResult,
   BugParentRequirementResult,
   DownloadedResourceResult,
+  DownloadedResourceByIdResult,
   ExecutionTasksResult,
   RequirementBugsResult,
   RequirementDetailResult,
@@ -83,6 +84,7 @@ function createRuntime(overrides?: {
   getRelatedWikiPages?: Runtime["client"]["getRelatedWikiPages"];
   getTaskRichResources?: Runtime["client"]["getTaskRichResources"];
   downloadResource?: Runtime["client"]["downloadResource"];
+  downloadResourceById?: Runtime["client"]["downloadResourceById"];
 }): Runtime {
   const fallbackDoc: DocDetail = {
     doc: {
@@ -291,6 +293,15 @@ function createRuntime(overrides?: {
     size_bytes: 4,
     content_base64: "dGVzdA==",
   };
+  const fallbackDownloadedResourceById: DownloadedResourceByIdResult = {
+    resource_id: "IMG-1",
+    filename: "IMG-1.png",
+    mime_type: "image/png",
+    size_bytes: 4,
+    width: 1,
+    height: 1,
+    content_base64: "iVBORw==",
+  };
 
   return {
     cfg: baseConfig,
@@ -373,6 +384,9 @@ function createRuntime(overrides?: {
       downloadResource:
         overrides?.downloadResource ??
         vi.fn().mockResolvedValue(fallbackDownloadedResource),
+      downloadResourceById:
+        overrides?.downloadResourceById ??
+        vi.fn().mockResolvedValue(fallbackDownloadedResourceById),
     } as Runtime["client"],
   };
 }
@@ -433,6 +447,7 @@ describe("mcp tools", () => {
         "get_related_wiki_pages",
         "get_task_rich_resources",
         "download_ones_resource",
+        "download_ones_resource_by_id",
       ]);
 
       const searchDocs = tools.tools.find((tool) => tool.name === "search_docs");
@@ -456,6 +471,9 @@ describe("mcp tools", () => {
       const downloadOnesResource = tools.tools.find(
         (tool) => tool.name === "download_ones_resource",
       );
+      const downloadOnesResourceById = tools.tools.find(
+        (tool) => tool.name === "download_ones_resource_by_id",
+      );
 
       expect(searchDocs?.annotations).toMatchObject({
         readOnlyHint: true,
@@ -472,6 +490,7 @@ describe("mcp tools", () => {
       expect(searchDocs?.outputSchema?.properties).toHaveProperty("items");
       expect(getDoc?.outputSchema?.properties).toHaveProperty("doc");
       expect(getDoc?.outputSchema?.properties).toHaveProperty("markdown");
+      expect(getDoc?.outputSchema?.properties).toHaveProperty("resources");
       expect(getDoc?.inputSchema?.properties).not.toHaveProperty("view");
       expect(getDoc?.outputSchema?.properties).not.toHaveProperty("llm_view");
       expect(getDocOutline?.outputSchema?.properties).toHaveProperty("sections");
@@ -494,6 +513,54 @@ describe("mcp tools", () => {
       expect(listRequirementBugs?.outputSchema?.properties).toHaveProperty("bugs");
       expect(downloadOnesResource?.inputSchema?.properties).toHaveProperty("url");
       expect(downloadOnesResource?.outputSchema?.properties).toHaveProperty("content_base64");
+      expect(downloadOnesResourceById?.inputSchema?.properties).toHaveProperty("resource_id");
+      expect(downloadOnesResourceById?.outputSchema?.properties).not.toHaveProperty("content_base64");
+    } finally {
+      await server.close();
+      await client.close();
+    }
+  });
+
+  it("returns MCP ImageContent when downloading an ONES image by stable resource id", async () => {
+    const downloadResourceById = vi.fn().mockResolvedValue({
+      resource_id: "Btj2N3hz",
+      filename: "wiki-image.png",
+      mime_type: "image/png",
+      size_bytes: 8,
+      width: 1,
+      height: 1,
+      content_base64: "iVBORw0KGgo=",
+    } satisfies DownloadedResourceByIdResult);
+    const { client, server } = await connectTestClient(createRuntime({ downloadResourceById }));
+
+    try {
+      const result = await client.callTool({
+        name: "download_ones_resource_by_id",
+        arguments: {
+          resource_id: "Btj2N3hz",
+          operation: "imageMogr2/auto-orient",
+        },
+      });
+
+      expect(downloadResourceById).toHaveBeenCalledWith(
+        "Btj2N3hz",
+        "imageMogr2/auto-orient",
+      );
+      expect(result.content).toEqual([
+        {
+          type: "image",
+          data: "iVBORw0KGgo=",
+          mimeType: "image/png",
+        },
+      ]);
+      expect(result.structuredContent).toEqual({
+        resource_id: "Btj2N3hz",
+        filename: "wiki-image.png",
+        mime_type: "image/png",
+        size_bytes: 8,
+        width: 1,
+        height: 1,
+      });
     } finally {
       await server.close();
       await client.close();
@@ -577,6 +644,23 @@ describe("mcp tools", () => {
         source_format: "html",
       },
       markdown: "# Latest Doc",
+      resources: [
+        {
+          type: "image",
+          resource_id: "Btj2N3hz",
+          ref_type: "wiki",
+          ref_id: "page-ref",
+          alt: null,
+          caption: null,
+          filename: "image.png",
+          mime_type: "image/png",
+          size_bytes: 123,
+          width: 10,
+          height: 20,
+          url: "https://ones.example.internal/fresh/image.png",
+          error: null,
+        },
+      ],
     };
     const runtime = createRuntime({
       getDocByRequirementId: vi.fn().mockResolvedValue(doc),

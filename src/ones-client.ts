@@ -1,6 +1,7 @@
 import type { EndpointDiscovery } from "./discovery/endpoint-discovery.js";
 import type {
   DocDetail,
+  DocImageResource,
   DocMetadata,
   DocumentChunkResult,
   DocumentContextResult,
@@ -31,6 +32,7 @@ import type {
   BugParentRequirementResult,
   CustomField,
   DownloadedResourceResult,
+  DownloadedResourceByIdResult,
   ExecutionTasksResult,
   RequirementBugsResult,
   RequirementDetailResult,
@@ -51,9 +53,15 @@ import type {
   WorkItemRef,
   WorkItemUser,
 } from "./work-items/model.js";
+import { extractHtmlImageReferences } from "./resources/html-images.js";
+import {
+  DEFAULT_IMAGE_OPERATION,
+  OnesResourceService,
+} from "./resources/ones-resource-service.js";
 
 export type SessionProvider = {
   getValidAuthHeaders(): Promise<Record<string, string>>;
+  getCurrentTeamUuid?(): Promise<string | null>;
   invalidate(): void;
 };
 
@@ -80,6 +88,7 @@ type LoadedDocument = {
   doc: DocMetadata;
   raw: string;
   parsed: ParsedDocument;
+  teamUuid: string | null;
 };
 
 type ParsedTaskUrl = {
@@ -215,7 +224,10 @@ const SEARCH_TASKS_BY_NUMBER_QUERY = `
 
 export class OnesClient {
   private readonly ocrRunner: ReturnType<typeof createOcrRunner>;
+  private readonly resourceService: OnesResourceService;
   private readonly editorResourceTokens = new Map<string, string>();
+  private readonly resourceTeamUuids = new Map<string, string>();
+  private activeTeamUuid: string | null;
 
   constructor(
     private readonly cfg: OnesClientConfig,
@@ -223,6 +235,19 @@ export class OnesClient {
     private readonly discovery: EndpointDiscovery,
   ) {
     this.ocrRunner = createOcrRunner(cfg.ocr);
+    this.activeTeamUuid = cfg.defaultTeamId?.trim() || null;
+    this.resourceService = new OnesResourceService(
+      cfg.baseUrl,
+      (pathOrUrl, init, options) =>
+        this.requestResponse(
+          pathOrUrl,
+          init,
+          true,
+          options.absolute,
+          options.acceptedStatuses,
+          options.includeAuth ?? true,
+        ),
+    );
   }
 
   async searchDocs(query: string, limit: number): Promise<SearchDocItem[]> {
@@ -550,16 +575,48 @@ export class OnesClient {
   async downloadResource(url: string): Promise<DownloadedResourceResult> {
     const normalizedUrl = this.normalizeDownloadUrl(url);
     const requestUrl = this.withCachedEditorResourceToken(normalizedUrl);
-    const response = await this.requestResponse(requestUrl, { method: "GET" }, true, true);
-    const bytes = new Uint8Array(await response.arrayBuffer());
-
+    const downloaded = await this.resourceService.downloadUrl(requestUrl, {
+      expectedImage: false,
+    });
     return {
       url: normalizedUrl,
-      filename: this.extractFilename(response, normalizedUrl),
-      mime_type: response.headers.get("content-type"),
-      size_bytes: this.extractResponseSize(response, bytes.byteLength),
-      content_base64: Buffer.from(bytes).toString("base64"),
+      filename: downloaded.filename,
+      mime_type: downloaded.mime_type,
+      size_bytes: downloaded.size_bytes,
+      content_base64: downloaded.content_base64,
     };
+  }
+
+  async downloadResourceById(
+    resourceId: string,
+    operation = DEFAULT_IMAGE_OPERATION,
+  ): Promise<DownloadedResourceByIdResult> {
+    const normalizedResourceId = resourceId.trim();
+    if (!normalizedResourceId) {
+      throw new AppError("INVALID_INPUT", "Resource ID is required");
+    }
+    const resourceTeamUuid = this.resourceTeamUuids.get(normalizedResourceId);
+    const sessionTeamUuid = resourceTeamUuid
+      ? null
+      : (await this.sessions.getCurrentTeamUuid?.()) ?? null;
+    const teamUuid =
+      resourceTeamUuid ??
+      sessionTeamUuid ??
+      this.activeTeamUuid ??
+      this.cfg.defaultTeamId?.trim() ??
+      null;
+    if (!teamUuid) {
+      throw new AppError(
+        "CONFIG_ERROR",
+        "ONES team UUID is unavailable. Call get_doc(include_resources=true) first or configure ONES_TEAM_ID.",
+      );
+    }
+
+    return this.resourceService.downloadById(
+      normalizedResourceId,
+      teamUuid,
+      operation.trim() || DEFAULT_IMAGE_OPERATION,
+    );
   }
 
   private collectMaterialTextSources(
@@ -676,20 +733,17 @@ export class OnesClient {
   ): TaskRichResource[] {
     const resources = new Map<string, TaskRichResource>();
     for (const source of textSources) {
-      const imageTags = source.text.match(/<img\b[^>]*>/gi) ?? [];
-      for (const tag of imageTags) {
-        const src = this.readHtmlAttribute(tag, "src");
-        const resourceId = this.readHtmlAttribute(tag, "data-uuid");
-        const key = resourceId ?? src ?? `${source.source}:${resources.size}`;
+      for (const image of extractHtmlImageReferences(source.text)) {
+        const key = image.resource_id ?? image.src;
         if (!resources.has(key)) {
           resources.set(key, {
             type: "image",
-            resource_id: resourceId,
-            src,
-            mime_type: this.readHtmlAttribute(tag, "data-mime"),
-            alt: this.readHtmlAttribute(tag, "alt"),
-            ref_id: this.readHtmlAttribute(tag, "data-ref-id"),
-            ref_type: this.readHtmlAttribute(tag, "data-ref-type"),
+            resource_id: image.resource_id,
+            src: image.src,
+            mime_type: image.mime_type,
+            alt: image.alt,
+            ref_id: image.ref_id,
+            ref_type: image.ref_type,
             source: source.source,
           });
         }
@@ -780,15 +834,6 @@ export class OnesClient {
     return "external";
   }
 
-  private readHtmlAttribute(tag: string, name: string): string | null {
-    const escapedName = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const match = tag.match(
-      new RegExp(`${escapedName}\\s*=\\s*(?:"([^"]*)"|'([^']*)'|([^\\s>]+))`, "i"),
-    );
-    const value = match?.[1] ?? match?.[2] ?? match?.[3];
-    return value ? this.decodeHtmlEntities(value) : null;
-  }
-
   private decodeHtmlEntities(value: string): string {
     return value
       .replace(/&amp;/g, "&")
@@ -812,9 +857,24 @@ export class OnesClient {
     loaded: LoadedDocument,
     options: GetDocOptions,
   ): Promise<DocDetail> {
+    const resources = options.includeResources
+      ? await this.resourceService.refreshDocumentResources(
+          loaded.parsed.resources,
+          loaded.teamUuid,
+        )
+      : loaded.parsed.resources;
+
+    if (options.includeResources && loaded.teamUuid) {
+      for (const resource of resources) {
+        if (resource.type === "image" && resource.resource_id) {
+          this.resourceTeamUuids.set(resource.resource_id, loaded.teamUuid);
+        }
+      }
+    }
+
     const renderDoc: ParsedDocument = {
       children: loaded.parsed.children,
-      resources: loaded.parsed.resources,
+      resources,
     };
 
     const detail: DocDetail = {
@@ -826,6 +886,10 @@ export class OnesClient {
       detail.raw = {
         content: loaded.raw,
       };
+    }
+
+    if (options.includeResources) {
+      detail.resources = this.toDocImageResources(resources);
     }
 
     return detail;
@@ -854,7 +918,7 @@ export class OnesClient {
     const contentData = await this.requestJson<Record<string, unknown>>(contentPath, {
       method: "GET",
     });
-    return this.loadDocument(infoData, contentData, pageId);
+    return this.loadDocument(infoData, contentData, pageId, teamId);
   }
 
   private async loadDocByRequirementId(requirementId: string): Promise<LoadedDocument> {
@@ -1073,6 +1137,7 @@ export class OnesClient {
     teamId?: string,
   ): Promise<Record<string, unknown>> {
     const resolvedTeamId = this.requireTeamId(teamId);
+    this.activeTeamUuid = resolvedTeamId;
     try {
       return await this.loadOnesProjectTaskInfo(taskId, resolvedTeamId);
     } catch (error) {
@@ -1433,6 +1498,7 @@ export class OnesClient {
     metaSource: Record<string, unknown>,
     contentSource: Record<string, unknown>,
     fallbackId: string,
+    explicitTeamUuid?: string,
   ): Promise<LoadedDocument> {
     const source = detectDocumentSource(contentSource);
     const parsed = this.parseDocument(source.raw, source.format);
@@ -1441,6 +1507,19 @@ export class OnesClient {
       contentSource,
       parsed.resources,
     );
+    const sessionTeamUuid = (await this.sessions.getCurrentTeamUuid?.()) ?? null;
+    const teamUuid =
+      explicitTeamUuid?.trim() ||
+      this.pickString(metaSource, ["team_uuid", "team_id", "teamId"]) ||
+      this.pickString(contentSource, ["team_uuid", "team_id", "teamId"]) ||
+      sessionTeamUuid ||
+      this.activeTeamUuid ||
+      this.cfg.defaultTeamId?.trim() ||
+      null;
+    if (teamUuid) {
+      this.activeTeamUuid = teamUuid;
+    }
+
     return {
       doc: {
         id: String(metaSource.id ?? fallbackId),
@@ -1457,7 +1536,39 @@ export class OnesClient {
         children: parsed.children,
         resources: normalizedResources,
       },
+      teamUuid,
     };
+  }
+
+  private toDocImageResources(resources: DocumentResource[]): DocImageResource[] {
+    const result: DocImageResource[] = [];
+    const seen = new Set<string>();
+    for (const resource of resources) {
+      if (
+        resource.type !== "image" ||
+        !resource.resource_id ||
+        seen.has(resource.resource_id)
+      ) {
+        continue;
+      }
+      seen.add(resource.resource_id);
+      result.push({
+        type: "image",
+        resource_id: resource.resource_id,
+        ref_type: resource.ref_type ?? null,
+        ref_id: resource.ref_id ?? null,
+        alt: resource.alt ?? null,
+        caption: resource.caption ?? null,
+        filename: resource.filename ?? null,
+        mime_type: resource.mime_type ?? null,
+        size_bytes: resource.size_bytes ?? null,
+        width: resource.width ?? null,
+        height: resource.height ?? null,
+        url: resource.src || null,
+        error: resource.error ?? null,
+      });
+    }
+    return result;
   }
 
   private buildOutlineFromLoaded(loaded: LoadedDocument): DocumentOutline {
@@ -1770,42 +1881,19 @@ export class OnesClient {
     return normalized.toString();
   }
 
-  private extractFilename(response: Response, url: string): string | null {
-    const disposition = response.headers.get("content-disposition");
-    const match = disposition?.match(/filename\*=UTF-8''([^;]+)|filename=\"?([^\";]+)\"?/i);
-    const encoded = match?.[1] ?? match?.[2] ?? null;
-    if (encoded) {
-      try {
-        return decodeURIComponent(encoded);
-      } catch {
-        return encoded;
-      }
-    }
-
-    const pathname = new URL(url).pathname;
-    const lastSegment = pathname.split("/").filter(Boolean).at(-1) ?? "";
-    return lastSegment || null;
-  }
-
-  private extractResponseSize(response: Response, fallback: number): number {
-    const length = response.headers.get("content-length");
-    if (!length) {
-      return fallback;
-    }
-
-    const parsed = Number(length);
-    return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
-  }
-
   private async requestResponse(
     pathOrUrl: string,
     init: RequestInit,
     retryable = true,
     absolute = false,
+    acceptedStatuses: readonly number[] = [],
+    includeAuth = true,
   ): Promise<Response> {
     const requestId = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
     const startedAt = Date.now();
-    const authHeaders = await this.sessions.getValidAuthHeaders();
+    const authHeaders = includeAuth
+      ? await this.sessions.getValidAuthHeaders()
+      : {};
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), this.cfg.timeoutMs);
     const target = absolute ? pathOrUrl : `${this.cfg.baseUrl}${pathOrUrl}`;
@@ -1820,17 +1908,26 @@ export class OnesClient {
         signal: controller.signal,
       });
 
-      if ([401, 403].includes(res.status)) {
+      const accepted = acceptedStatuses.includes(res.status);
+
+      if (!accepted && includeAuth && [401, 403].includes(res.status)) {
         this.sessions.invalidate();
 
         if (retryable) {
-          return this.requestResponse(pathOrUrl, init, false, absolute);
+          return this.requestResponse(
+            pathOrUrl,
+            init,
+            false,
+            absolute,
+            acceptedStatuses,
+            includeAuth,
+          );
         }
 
         throw new AppError("AUTH_FAILED", "ONES authentication failed", res.status);
       }
 
-      if (res.status === 405) {
+      if (!accepted && res.status === 405) {
         throw new AppError(
           "UPSTREAM_ERROR",
           "ONES upstream request method not allowed",
@@ -1838,11 +1935,11 @@ export class OnesClient {
         );
       }
 
-      if (res.status === 404) {
+      if (!accepted && res.status === 404) {
         throw new AppError("NOT_FOUND", "ONES resource not found", 404);
       }
 
-      if (!res.ok) {
+      if (!accepted && !res.ok) {
         throw new AppError("UPSTREAM_ERROR", "ONES upstream request failed", res.status);
       }
 

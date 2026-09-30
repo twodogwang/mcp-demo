@@ -50,6 +50,17 @@ type BaseDocumentResource = {
 
 export type DocumentImageResource = BaseDocumentResource & {
   type: "image";
+  resource_id?: string;
+  ref_type?: string;
+  ref_id?: string;
+  caption?: string;
+  original_url?: string;
+  filename?: string;
+  mime_type?: string;
+  size_bytes?: number;
+  width?: number;
+  height?: number;
+  error?: string | null;
   ocr?: DocumentResourceOcr;
 };
 
@@ -96,6 +107,23 @@ export type DocDetail = {
   doc: DocMetadata;
   markdown: string;
   raw?: RawDocumentView;
+  resources?: DocImageResource[];
+};
+
+export type DocImageResource = {
+  type: "image";
+  resource_id: string;
+  ref_type: string | null;
+  ref_id: string | null;
+  alt: string | null;
+  caption: string | null;
+  filename: string | null;
+  mime_type: string | null;
+  size_bytes: number | null;
+  width: number | null;
+  height: number | null;
+  url: string | null;
+  error: string | null;
 };
 
 export type DocumentSectionOutline = {

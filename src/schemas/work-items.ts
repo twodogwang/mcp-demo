@@ -13,6 +13,11 @@ export const downloadOnesResourceInputSchema = z.object({
   url: z.string().min(1),
 });
 
+export const downloadOnesResourceByIdInputSchema = z.object({
+  resource_id: z.string().min(1),
+  operation: z.string().min(1).default("imageMogr2/auto-orient"),
+});
+
 const nullableRefSchema = z
   .object({
     id: z.string(),
@@ -190,6 +195,18 @@ export const downloadedResourceOutputSchema = z.object({
   content_base64: z.string(),
 });
 
+export const downloadedResourceByIdOutputSchema = z.object({
+  resource_id: z.string(),
+  filename: z.string().nullable(),
+  mime_type: z.string(),
+  size_bytes: z.number().int().min(0),
+  width: z.number().int().min(0).nullable(),
+  height: z.number().int().min(0).nullable(),
+});
+
 export type WorkItemLookupInput = z.infer<typeof workItemLookupInputSchema>;
 export type WorkItemTaskInput = z.infer<typeof workItemTaskInputSchema>;
 export type DownloadOnesResourceInput = z.infer<typeof downloadOnesResourceInputSchema>;
+export type DownloadOnesResourceByIdInput = z.infer<
+  typeof downloadOnesResourceByIdInputSchema
+>;

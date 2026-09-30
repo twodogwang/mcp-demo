@@ -160,6 +160,7 @@ ONES_PASSWORD = "your_password_here"
 - `get_related_wiki_pages`
 - `get_task_rich_resources`
 - `download_ones_resource`
+- `download_ones_resource_by_id`
 
 这些工具都会继续返回可读的 JSON 文本内容，同时也会提供 MCP `structuredContent` 供支持结构化结果的客户端直接消费。
 
@@ -305,7 +306,15 @@ OPENAI_BASE_URL=
 可选参数：
 
 - `include_raw`：是否返回原始 ONES 内容，默认 `false`
-- `include_resources`：是否返回资源清单及 OCR 元数据，默认 `true`
+- `include_resources`：是否刷新图片 URL 并返回稳定资源清单，默认 `true`
+
+图片分析推荐按以下顺序调用：
+
+1. `get_doc(include_resources=true)` 获取正文与 `resources`
+2. 从 `resources` 读取稳定的 `resource_id`
+3. 调用 `download_ones_resource_by_id`，直接取得 MCP 原生 `ImageContent`
+
+`resources` 中的图片包含 `resource_id`、`ref_type`、`ref_id`、`alt`、`caption`、文件名、MIME、大小、宽高、刷新后的 `url` 和单图 `error`。`get_doc` 不会内嵌图片 base64；单张图片刷新失败也不会阻断正文返回。
 
 当 `ref` 为 `#12345` 时：
 
@@ -417,6 +426,7 @@ ONES_TEAM_ID=63FL1oSZ
 - `get_related_wiki_pages`：发现需求关联或正文链接到的 ONES wiki 页面
 - `get_task_rich_resources`：提取任务正文里的富文本图片资源
 - `download_ones_resource`：使用当前 MCP 登录态下载 ONES 鉴权资源，返回文件元数据和 base64 内容
+- `download_ones_resource_by_id`：使用稳定 `resource_id` 刷新签名 URL，并把图片作为 MCP 原生 `ImageContent` 返回
 
 示例参数：
 
@@ -432,11 +442,16 @@ ONES_TEAM_ID=63FL1oSZ
 {"url":"https://ones.example.internal/wiki/api/wiki/editor/team-id/ref-id/resources/mock-image.png"}
 ```
 
+```json
+{"resource_id":"Btj2N3hz","operation":"imageMogr2/auto-orient"}
+```
+
 说明：
 
 - `get_task_rich_resources` 默认只返回资源元数据和 `src`，不会自动下载文件
-- 如果图片/附件链接需要 ONES 鉴权，调用 `download_ones_resource`，MCP 会复用当前登录态下载
-- 当前下载返回 `content_base64`，是否落盘由调用方自行决定
+- Wiki 图片优先使用 `get_doc(include_resources=true)` 返回的 `resource_id` 调用 `download_ones_resource_by_id`，避免依赖可能过期的签名 URL
+- `download_ones_resource` 保留 URL 下载兼容能力；图片响应会校验 MIME 与 PNG/JPEG/GIF/WebP 文件签名，登录页或不可解码内容会作为错误返回
+- `download_ones_resource` 继续返回 `content_base64`，是否落盘由调用方自行决定
 
 ## 发布流程
 

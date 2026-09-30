@@ -3,7 +3,9 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
   bugDetailOutputSchema,
   bugParentRequirementOutputSchema,
+  downloadOnesResourceByIdInputSchema,
   downloadOnesResourceInputSchema,
+  downloadedResourceByIdOutputSchema,
   downloadedResourceOutputSchema,
   executionTasksOutputSchema,
   requirementBugsOutputSchema,
@@ -442,7 +444,7 @@ export function registerWorkItemTools(
     {
       title: "Download ONES Resource",
       description:
-        "Download an ONES-authenticated image or file resource by URL using the current MCP login session.",
+        "Download an ONES resource by URL. Signed image URLs can expire; prefer get_doc(include_resources=true) followed by download_ones_resource_by_id.",
       inputSchema: downloadOnesResourceInputSchema,
       outputSchema: downloadedResourceOutputSchema,
       annotations: readOnlyToolAnnotations,
@@ -453,6 +455,37 @@ export function registerWorkItemTools(
         return createJsonToolResult(await client.downloadResource(url));
       } catch (error) {
         return createToolErrorResult("download_ones_resource", error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "download_ones_resource_by_id",
+    {
+      title: "Download ONES Image By Resource ID",
+      description:
+        "Resolve a fresh signed URL for a stable ONES resource_id and return the image as MCP ImageContent. Recommended flow: get_doc(include_resources=true), read resources, then call this tool.",
+      inputSchema: downloadOnesResourceByIdInputSchema,
+      outputSchema: downloadedResourceByIdOutputSchema,
+      annotations: readOnlyToolAnnotations,
+    },
+    async ({ resource_id, operation }) => {
+      try {
+        const { client } = await getRuntime();
+        const downloaded = await client.downloadResourceById(resource_id, operation);
+        const { content_base64, ...metadata } = downloaded;
+        return {
+          content: [
+            {
+              type: "image" as const,
+              data: content_base64,
+              mimeType: downloaded.mime_type,
+            },
+          ],
+          structuredContent: metadata,
+        };
+      } catch (error) {
+        return createToolErrorResult("download_ones_resource_by_id", error);
       }
     },
   );

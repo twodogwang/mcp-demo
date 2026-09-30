@@ -2,6 +2,40 @@ import { expect, it, vi } from "vitest";
 import { AppError } from "../src/errors";
 import { OnesClient } from "../src/ones-client";
 
+const ONE_PIXEL_PNG = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=",
+  "base64",
+);
+
+function createResourceTestClient(defaultTeamId: string | null = "63FL1oSZ"): OnesClient {
+  return new OnesClient(
+    {
+      baseUrl: "https://ones.example.internal",
+      defaultTeamId,
+      timeoutMs: 5000,
+      maxContentChars: 20000,
+      ocr: {
+        provider: null,
+        endpoint: null,
+        apiKey: null,
+        timeoutMs: 1000,
+      },
+    },
+    {
+      getValidAuthHeaders: vi.fn().mockResolvedValue({
+        Authorization: "Bearer token",
+        Cookie: "ones_session=abc",
+      }),
+      invalidate: vi.fn(),
+    },
+    {
+      resolveSearchPath: vi.fn(),
+      resolveDocTemplate: vi.fn(),
+      resolveRequirementTemplate: vi.fn(),
+    } as any,
+  );
+}
+
 it("re-login once on 401 then succeeds", async () => {
   const getValidAuthHeaders = vi
     .fn<() => Promise<Record<string, string>>>()
@@ -1112,11 +1146,11 @@ it("extracts requirement materials from rich task content", async () => {
 
 it("downloads ONES resource with existing auth session and returns base64 content", async () => {
   const fetchMock = vi.fn<typeof fetch>().mockResolvedValueOnce(
-    new Response(new Uint8Array([116, 101, 115, 116]), {
+    new Response(ONE_PIXEL_PNG, {
       status: 200,
       headers: {
         "content-type": "image/png",
-        "content-length": "4",
+        "content-length": String(ONE_PIXEL_PNG.byteLength),
         "content-disposition": 'inline; filename="mock-image.png"',
       },
     }),
@@ -1169,9 +1203,311 @@ it("downloads ONES resource with existing auth session and returns base64 conten
     url: "https://ones.example.internal/wiki/api/wiki/editor/team-1/ref-1/resources/mock-image.png",
     filename: "mock-image.png",
     mime_type: "image/png",
-    size_bytes: 4,
-    content_base64: "dGVzdA==",
+    size_bytes: ONE_PIXEL_PNG.byteLength,
+    content_base64: ONE_PIXEL_PNG.toString("base64"),
   });
+});
+
+it.each([
+  {
+    name: "HTML login page",
+    body: "<!doctype html><html><title>ONES Login</title></html>",
+    contentType: "text/html; charset=utf-8",
+  },
+  {
+    name: "JSON login response",
+    body: JSON.stringify({ login_url: "/identity/login", message: "login required" }),
+    contentType: "application/json",
+  },
+])("rejects an expired image URL that returns a $name", async ({ body, contentType }) => {
+  const fetchMock = vi.fn<typeof fetch>().mockResolvedValueOnce(
+    new Response(body, {
+      status: 200,
+      headers: { "content-type": contentType },
+    }),
+  );
+  vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
+
+  await expect(
+    createResourceTestClient().downloadResource(
+      "https://ones.example.internal/wiki/resources/download?signature=old",
+    ),
+  ).rejects.toMatchObject({
+    code: "RESOURCE_DOWNLOAD_FAILED",
+    message: expect.stringContaining("download_ones_resource_by_id"),
+  });
+});
+
+it.each([
+  {
+    name: "302 Location",
+    response: () =>
+      new Response(null, {
+        status: 302,
+        headers: { location: "/fresh/Btj2N3hz.png?signature=new" },
+      }),
+    expectedUrl: "https://ones.example.internal/fresh/Btj2N3hz.png?signature=new",
+  },
+  {
+    name: "JSON url",
+    response: () =>
+      new Response(
+        JSON.stringify({
+          url: "https://ones.example.internal/fresh/Btj2N3hz.png?signature=json",
+          filename: "wiki-image.png",
+          mime_type: "image/png",
+          width: 1,
+          height: 1,
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      ),
+    expectedUrl: "https://ones.example.internal/fresh/Btj2N3hz.png?signature=json",
+  },
+  {
+    name: "plain text url",
+    response: () =>
+      new Response("https://ones.example.internal/fresh/Btj2N3hz.png?signature=text", {
+        status: 200,
+        headers: { "content-type": "text/plain" },
+      }),
+    expectedUrl: "https://ones.example.internal/fresh/Btj2N3hz.png?signature=text",
+  },
+])("downloads a resource by stable id when attachment lookup returns $name", async ({ response, expectedUrl }) => {
+  const fetchMock = vi
+    .fn<typeof fetch>()
+    .mockResolvedValueOnce(response())
+    .mockResolvedValueOnce(
+      new Response(ONE_PIXEL_PNG, {
+        status: 200,
+        headers: { "content-type": "image/png" },
+      }),
+    );
+  vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
+
+  const result = await createResourceTestClient().downloadResourceById("Btj2N3hz");
+
+  expect(fetchMock).toHaveBeenNthCalledWith(
+    1,
+    "https://ones.example.internal/project/api/project/team/63FL1oSZ/res/attachment/Btj2N3hz?op=imageMogr2%2Fauto-orient",
+    expect.objectContaining({ method: "GET", redirect: "manual" }),
+  );
+  expect(fetchMock).toHaveBeenNthCalledWith(
+    2,
+    expectedUrl,
+    expect.objectContaining({ method: "GET" }),
+  );
+  expect(result).toMatchObject({
+    resource_id: "Btj2N3hz",
+    mime_type: "image/png",
+    size_bytes: ONE_PIXEL_PNG.byteLength,
+    width: 1,
+    height: 1,
+    content_base64: ONE_PIXEL_PNG.toString("base64"),
+  });
+});
+
+it("uses the authenticated session team when downloading by id without document context", async () => {
+  const fetchMock = vi
+    .fn<typeof fetch>()
+    .mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          url: "https://ones.example.internal/fresh/Btj2N3hz.png?signature=session",
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      ),
+    )
+    .mockResolvedValueOnce(
+      new Response(ONE_PIXEL_PNG, {
+        status: 200,
+        headers: { "content-type": "image/png" },
+      }),
+    );
+  vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
+  const client = new OnesClient(
+    {
+      baseUrl: "https://ones.example.internal",
+      defaultTeamId: null,
+      timeoutMs: 5000,
+      maxContentChars: 20000,
+      ocr: {
+        provider: null,
+        endpoint: null,
+        apiKey: null,
+        timeoutMs: 1000,
+      },
+    },
+    {
+      getValidAuthHeaders: vi.fn().mockResolvedValue({ Authorization: "Bearer token" }),
+      getCurrentTeamUuid: vi.fn().mockResolvedValue("session-team"),
+      invalidate: vi.fn(),
+    },
+    {
+      resolveSearchPath: vi.fn(),
+      resolveDocTemplate: vi.fn(),
+      resolveRequirementTemplate: vi.fn(),
+    } as any,
+  );
+
+  await client.downloadResourceById("Btj2N3hz");
+
+  expect(fetchMock).toHaveBeenNthCalledWith(
+    1,
+    "https://ones.example.internal/project/api/project/team/session-team/res/attachment/Btj2N3hz?op=imageMogr2%2Fauto-orient",
+    expect.objectContaining({ method: "GET" }),
+  );
+});
+
+it("uses a followed attachment response URL when no URL is present in the body", async () => {
+  const attachmentResponse = new Response("", {
+    status: 200,
+    headers: { "content-type": "text/plain" },
+  });
+  Object.defineProperty(attachmentResponse, "url", {
+    value: "https://ones.example.internal/fresh/5nVaFspM.png?signature=followed",
+  });
+  const fetchMock = vi
+    .fn<typeof fetch>()
+    .mockResolvedValueOnce(attachmentResponse)
+    .mockResolvedValueOnce(
+      new Response(ONE_PIXEL_PNG, {
+        status: 200,
+        headers: { "content-type": "image/png" },
+      }),
+    );
+  vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
+
+  const result = await createResourceTestClient().downloadResourceById("5nVaFspM");
+
+  expect(result.resource_id).toBe("5nVaFspM");
+  expect(fetchMock).toHaveBeenNthCalledWith(
+    2,
+    "https://ones.example.internal/fresh/5nVaFspM.png?signature=followed",
+    expect.objectContaining({ method: "GET" }),
+  );
+});
+
+it("refreshes duplicate wiki image ids once and renders markdown with the fresh URL", async () => {
+  const oldUrl = "https://ones.example.internal/expired.png?signature=old";
+  const freshUrl = "https://ones.example.internal/fresh/Btj2N3hz.png?signature=new";
+  const fetchMock = vi
+    .fn<typeof fetch>()
+    .mockResolvedValueOnce(
+      new Response(JSON.stringify({ uuid: "X2YCyoMe", title: "图片页", ref_type: 1 }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    )
+    .mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          content: `<p>正文</p><img src="${oldUrl}" data-uuid="Btj2N3hz" data-ref-type="wiki" data-ref-id="not-a-team"><img src="${oldUrl}" data-uuid="Btj2N3hz">`,
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      ),
+    )
+    .mockResolvedValueOnce(
+      new Response(JSON.stringify({ url: freshUrl }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+  vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
+
+  const result = await createResourceTestClient().getPageDoc("63FL1oSZ", "X2YCyoMe", {
+    includeRaw: true,
+    includeResources: true,
+  });
+
+  expect(fetchMock).toHaveBeenCalledTimes(3);
+  expect(fetchMock).toHaveBeenNthCalledWith(
+    3,
+    "https://ones.example.internal/project/api/project/team/63FL1oSZ/res/attachment/Btj2N3hz?op=imageMogr2%2Fauto-orient",
+    expect.any(Object),
+  );
+  expect(result.resources).toHaveLength(1);
+  expect(result.resources?.[0]).toMatchObject({
+    type: "image",
+    resource_id: "Btj2N3hz",
+    ref_type: "wiki",
+    ref_id: "not-a-team",
+    url: freshUrl,
+    error: null,
+  });
+  expect(result.markdown.split(freshUrl)).toHaveLength(3);
+});
+
+it("keeps document content when one wiki image URL refresh fails", async () => {
+  const firstOldUrl = "https://ones.example.internal/expired-a.png";
+  const secondFreshUrl = "https://ones.example.internal/fresh/5nVaFspM.png";
+  const fetchMock = vi
+    .fn<typeof fetch>()
+    .mockResolvedValueOnce(
+      new Response(JSON.stringify({ uuid: "X2YCyoMe", title: "图片页", ref_type: 1 }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    )
+    .mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          content: `<p>正文仍可读</p><img src="${firstOldUrl}" data-uuid="Btj2N3hz"><img src="https://ones.example.internal/expired-b.png" data-uuid="5nVaFspM">`,
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      ),
+    )
+    .mockResolvedValueOnce(new Response("failed", { status: 500 }))
+    .mockResolvedValueOnce(
+      new Response(JSON.stringify({ url: secondFreshUrl }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+  vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
+
+  const result = await createResourceTestClient().getPageDoc("63FL1oSZ", "X2YCyoMe", {
+    includeRaw: false,
+    includeResources: true,
+  });
+
+  expect(result.markdown).toContain("正文仍可读");
+  expect(result.resources).toHaveLength(2);
+  expect(result.resources?.find((item) => item.resource_id === "Btj2N3hz")).toMatchObject({
+    url: firstOldUrl,
+    error: expect.any(String),
+  });
+  expect(result.resources?.find((item) => item.resource_id === "5nVaFspM")).toMatchObject({
+    url: secondFreshUrl,
+    error: null,
+  });
+});
+
+it("does not request attachment URLs when include_resources is false", async () => {
+  const oldUrl = "https://ones.example.internal/expired.png";
+  const fetchMock = vi
+    .fn<typeof fetch>()
+    .mockResolvedValueOnce(
+      new Response(JSON.stringify({ uuid: "X2YCyoMe", title: "图片页", ref_type: 1 }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    )
+    .mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({ content: `<img src="${oldUrl}" data-uuid="Btj2N3hz">` }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      ),
+    );
+  vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
+
+  const result = await createResourceTestClient().getPageDoc("63FL1oSZ", "X2YCyoMe", {
+    includeRaw: false,
+    includeResources: false,
+  });
+
+  expect(fetchMock).toHaveBeenCalledTimes(2);
+  expect(result).not.toHaveProperty("resources");
+  expect(result.markdown).toContain(oldUrl);
 });
 
 it("surfaces 405 resource download as upstream error without invalidating auth", async () => {
@@ -1266,11 +1602,11 @@ it("downloads rendered wiki page editor resources with the page content token", 
       ),
     )
     .mockResolvedValueOnce(
-      new Response(new Uint8Array([137, 80, 78, 71]), {
+      new Response(ONE_PIXEL_PNG, {
         status: 200,
         headers: {
           "content-type": "image/png",
-          "content-length": "4",
+          "content-length": String(ONE_PIXEL_PNG.byteLength),
         },
       }),
     );
@@ -1317,8 +1653,8 @@ it("downloads rendered wiki page editor resources with the page content token", 
   expect(result).toMatchObject({
     url: imageUrl,
     mime_type: "image/png",
-    size_bytes: 4,
-    content_base64: "iVBORw==",
+    size_bytes: ONE_PIXEL_PNG.byteLength,
+    content_base64: ONE_PIXEL_PNG.toString("base64"),
   });
 });
 

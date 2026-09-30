@@ -38,6 +38,8 @@ function formatToolErrorMessage(error: unknown): string {
         return "Failed to discover the ONES API path. Check ONES_BASE_URL and network access.";
       case "UPSTREAM_ERROR":
         return "ONES request failed upstream. Try again later or verify network connectivity.";
+      case "RESOURCE_DOWNLOAD_FAILED":
+        return error.message;
       default:
         return error.message;
     }

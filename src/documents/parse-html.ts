@@ -7,6 +7,7 @@ import type {
   TableCellNode,
   TableRowNode,
 } from "./model.js";
+import { readHtmlImageReference } from "../resources/html-images.js";
 
 type HtmlNode = DefaultTreeAdapterMap["childNode"];
 type HtmlElement = DefaultTreeAdapterMap["element"];
@@ -16,12 +17,14 @@ type HtmlAnyNode = DefaultTreeAdapterMap["node"];
 
 type ParseState = {
   resources: DocumentResource[];
+  resourceRefsByStableId: Map<string, string>;
 };
 
 export function parseHtmlDocument(raw: string): ParsedDocument {
   const root = parseFragment(raw);
   const state: ParseState = {
     resources: [],
+    resourceRefsByStableId: new Map(),
   };
 
   return {
@@ -160,20 +163,36 @@ function parseImageNode(
   path: string,
   state: ParseState,
 ): DocumentNode | null {
-  const src = (getAttribute(element, "src") ?? "").trim();
-  if (!src) {
+  const image = readHtmlImageReference(element);
+  if (!image) {
     return null;
   }
 
-  const alt = getAttribute(element, "alt");
-  const resourceRef = `res-image-${state.resources.length}`;
+  const existingRef = image.resource_id
+    ? state.resourceRefsByStableId.get(image.resource_id)
+    : undefined;
+  const resourceRef = existingRef ?? `res-image-${state.resources.length}`;
 
-  state.resources.push({
-    id: resourceRef,
-    type: "image",
-    src,
-    alt,
-  });
+  if (!existingRef) {
+    state.resources.push({
+      id: resourceRef,
+      type: "image",
+      src: image.src,
+      alt: image.alt,
+      ...(image.resource_id ? { resource_id: image.resource_id, original_url: image.src } : {}),
+      ...(image.ref_type ? { ref_type: image.ref_type } : {}),
+      ...(image.ref_id ? { ref_id: image.ref_id } : {}),
+      ...(image.caption ? { caption: image.caption } : {}),
+      ...(image.resource_id && image.filename ? { filename: image.filename } : {}),
+      ...(image.mime_type ? { mime_type: image.mime_type } : {}),
+      ...(image.size_bytes ? { size_bytes: image.size_bytes } : {}),
+      ...(image.width ? { width: image.width } : {}),
+      ...(image.height ? { height: image.height } : {}),
+    });
+    if (image.resource_id) {
+      state.resourceRefsByStableId.set(image.resource_id, resourceRef);
+    }
+  }
 
   return {
     type: "image",
