@@ -1,5 +1,11 @@
 # @bakarhythm/get-doc-content
 
+## 2.1.0
+
+### Minor Changes
+
+- b843bc1: Add stable Wiki image resource metadata, fresh signed URL resolution, MCP-native image downloads by resource ID, and validation for expired image URLs.
+
 ## 2.0.2
 
 ### Patch Changes
